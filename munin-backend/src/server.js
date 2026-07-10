@@ -1,0 +1,48 @@
+require("dotenv").config();
+const express = require("express");
+const cors = require("cors");
+
+const { initDb } = require("./db");
+const { notFound, errorHandler } = require("./middleware/errorHandler");
+
+const dashboardRoutes = require("./routes/dashboard");
+const sessionsRoutes = require("./routes/sessions");
+const knowledgeRoutes = require("./routes/knowledge");
+const coverageRoutes = require("./routes/coverage");
+const smeRoutes = require("./routes/sme");
+const chatRoutes = require("./routes/chat");
+const authRoutes = require("./routes/auth");
+const settingsRoutes = require("./routes/settings");
+const documentsRoutes = require("./routes/documents");
+const meetingsRoutes = require("./routes/meetings");
+const mediaRoutes = require("./routes/media");
+
+initDb();
+
+const app = express();
+app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
+app.use(express.json());
+
+app.get("/api/health", (req, res) => {
+  res.json({ ok: true, service: "munin-backend", time: new Date().toISOString() });
+});
+
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/sessions", sessionsRoutes);
+app.use("/api/knowledge-objects", knowledgeRoutes);
+app.use("/api/coverage", coverageRoutes); // also owns /api/coverage/gaps
+app.use("/api/sme-map", smeRoutes);
+app.use("/api/chat", chatRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/settings", settingsRoutes);
+app.use("/api/documents", documentsRoutes);
+app.use("/api/meetings", meetingsRoutes);
+app.use("/api/media", mediaRoutes);
+
+app.use(notFound);
+app.use(errorHandler);
+
+const PORT = process.env.PORT || 4000;
+app.listen(PORT, () => {
+  console.log(`Munin backend listening on http://localhost:${PORT}`);
+});

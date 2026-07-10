@@ -1,0 +1,126 @@
+const express = require("express");
+const { db } = require("../db");
+const { SESSION_9, KNOWLEDGE_OBJECTS_SEED } = require("../data/seedData");
+
+const router = express.Router();
+
+function serializeSession(row) {
+  return {
+    id: row.id,
+    num: row.num,
+    module: row.module,
+    title: row.title,
+    date: row.date,
+    duration: row.duration,
+    status: row.status,
+    attendees: JSON.parse(row.attendees),
+  };
+}
+
+// GET /api/sessions — lightweight list (no transcript payload)
+router.get("/", (req, res) => {
+  const rows = db.prepare(`SELECT * FROM sessions ORDER BY num ASC`).all();
+  res.json(rows.map(serializeSession));
+});
+
+// GET /api/sessions/:id — full detail with transcript + extracted knowledge objects
+router.get("/:id", (req, res) => {
+  const row = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(req.params.id);
+  if (!row) return res.status(404).json({ error: "Session not found" });
+
+  const transcript = db
+    .prepare(`SELECT timestamp AS t, speaker AS s, text AS x FROM transcript_segments WHERE session_id = ? ORDER BY seq ASC`)
+    .all(row.id);
+
+  const knowledgeObjects = db
+    .prepare(`SELECT * FROM knowledge_objects WHERE session_id = ? ORDER BY id ASC`)
+    .all(row.id)
+    .map((k) => ({
+      id: k.id, title: k.title, type: k.type, module: k.module,
+      description: k.description, confidence: k.confidence,
+      needsReview: !!k.needs_review, source: k.source,
+      segmentTimestamp: k.segment_timestamp,
+    }));
+
+  res.json({ ...serializeSession(row), transcript, knowledgeObjects });
+});
+
+// POST /api/sessions/upload — simulates the "Upload session recording" demo flow.
+// Idempotent: calling it again after Session 9 already exists is a no-op.
+router.post("/upload", (req, res) => {
+  const already = db.prepare(`SELECT value FROM app_state WHERE key = 'session9_uploaded'`).get();
+  if (already && already.value === "true") {
+    return res.json({ alreadyUploaded: true, message: "Session 9 has already been added." });
+  }
+
+  const insertSession = db.prepare(
+    `INSERT INTO sessions (id, num, module, title, date, duration, status, attendees) VALUES (@id, @num, @module, @title, @date, @duration, @status, @attendees)`
+  );
+  const insertSegment = db.prepare(
+    `INSERT INTO transcript_segments (session_id, seq, timestamp, speaker, text) VALUES (@session_id, @seq, @timestamp, @speaker, @text)`
+  );
+  const insertKO = db.prepare(
+    `INSERT INTO knowledge_objects (id, title, type, module, description, confidence, needs_review, source, session_id, segment_timestamp)
+     VALUES (@id, @title, @type, @module, @description, @confidence, @needs_review, @source, @session_id, @segment_timestamp)`
+  );
+  const insertActivity = db.prepare(`INSERT INTO activity (text, created_at) VALUES (@text, @created_at)`);
+
+  const newKOs = KNOWLEDGE_OBJECTS_SEED.filter((k) => k.source.startsWith("KT Session 9"));
+
+  const tx = db.transaction(() => {
+    insertSession.run({
+      id: SESSION_9.id, num: SESSION_9.num, module: SESSION_9.module, title: SESSION_9.title,
+      date: SESSION_9.date, duration: SESSION_9.duration, status: SESSION_9.status,
+      attendees: JSON.stringify(SESSION_9.attendees),
+    });
+    SESSION_9.transcript.forEach((seg, i) => {
+      insertSegment.run({ session_id: SESSION_9.id, seq: i, timestamp: seg.t, speaker: seg.s, text: seg.x });
+    });
+    for (const k of newKOs) {
+      insertKO.run({
+        id: k.id, title: k.title, type: k.type, module: k.module,
+        description: k.description, confidence: k.confidence,
+        needs_review: k.needsReview ? 1 : 0, source: k.source,
+        session_id: SESSION_9.id, segment_timestamp: k.source.split(", ")[1],
+      });
+    }
+
+    // Coverage: "Gateway failover & DR" topic goes to fully demonstrated
+    db.prepare(
+      `UPDATE kt_topics SET depth = 3 WHERE module = 'Customer Notifications' AND topic = 'Gateway failover & DR'`
+    ).run();
+
+    // Close the matching open gap
+    db.prepare(`UPDATE gaps SET status = 'Closed' WHERE id = 'g9'`).run();
+
+    // Bump readiness for Customer Notifications
+    const current = db.prepare(`SELECT score FROM readiness WHERE module = 'Customer Notifications'`).get();
+    const nextScore = Math.min(100, (current ? current.score : 58) + 14);
+    db.prepare(`UPDATE readiness SET score = ? WHERE module = 'Customer Notifications'`).run(nextScore);
+
+    const now = new Date().toISOString();
+    insertActivity.run({ text: "KT Session 9 — Notification Gateway Failover & DR processed, 4 knowledge objects extracted.", created_at: now });
+    insertActivity.run({ text: "Gap closed: notification gateway failover procedure.", created_at: now });
+    insertActivity.run({ text: `Readiness recalculated for Customer Notifications (${nextScore}%).`, created_at: now });
+
+    db.prepare(`INSERT OR REPLACE INTO app_state (key, value) VALUES ('session9_uploaded', 'true')`).run();
+  });
+
+  tx();
+
+  const sessionRow = db.prepare(`SELECT * FROM sessions WHERE id = ?`).get(SESSION_9.id);
+  const transcript = db
+    .prepare(`SELECT timestamp AS t, speaker AS s, text AS x FROM transcript_segments WHERE session_id = ? ORDER BY seq ASC`)
+    .all(SESSION_9.id);
+  const readinessRow = db.prepare(`SELECT score FROM readiness WHERE module = 'Customer Notifications'`).get();
+
+  res.json({
+    alreadyUploaded: false,
+    session: { ...serializeSession(sessionRow), transcript },
+    newKnowledgeObjects: newKOs.map((k) => ({ ...k })),
+    updatedReadiness: { "Customer Notifications": readinessRow.score },
+    closedGapId: "g9",
+  });
+});
+
+module.exports = router;
