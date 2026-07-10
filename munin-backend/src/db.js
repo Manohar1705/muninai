@@ -219,6 +219,7 @@ function seedIfEmpty() {
 
     if (tableIsEmpty("knowledge_objects")) {
       for (const k of KNOWLEDGE_OBJECTS_SEED) {
+        if(k.source.startsWith("KT Session 9")) continue;
         const { sessionId, ts } = resolveKoSession(k.source);
         insertKO.run({
           id: k.id, title: k.title, type: k.type, module: k.module,
