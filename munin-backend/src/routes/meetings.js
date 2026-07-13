@@ -234,6 +234,12 @@ router.get("/:id/status", async (req, res) => {
 // will retry on failure, and a malformed/unexpected event shape here isn't
 // worth spamming their retry logs over.
 router.post("/webhook", (req, res) => {
+
+  console.log(
+    "WEBHOOK RECEIVED:",
+    JSON.stringify(req.body, null, 2)
+  );
+
   try {
     const { event, data, botId } = parseWebhookEvent(req.body);
 

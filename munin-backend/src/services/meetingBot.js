@@ -8,7 +8,7 @@
 //
 // Docs: https://docs.recall.ai/docs/quickstart
 
-const RECALL_API_REGION = process.env.RECALL_API_REGION || "us-west-2";
+const RECALL_API_REGION = process.env.RECALL_API_REGION || "ap-northeast-1";
 const RECALL_BASE_URL = `https://${RECALL_API_REGION}.recall.ai/api/v1`;
 
 function isRecallConfigured() {

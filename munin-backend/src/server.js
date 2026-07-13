@@ -16,7 +16,7 @@ const settingsRoutes = require("./routes/settings");
 const documentsRoutes = require("./routes/documents");
 const meetingsRoutes = require("./routes/meetings");
 const mediaRoutes = require("./routes/media");
-
+const { startTunnel } = require("./tunnel");
 initDb();
 
 const app = express();
@@ -42,7 +42,19 @@ app.use("/api/media", mediaRoutes);
 app.use(notFound);
 app.use(errorHandler);
 
+// const PORT = process.env.PORT || 4000;
+// app.listen(PORT, () => {
+//   console.log(`Munin backend listening on http://localhost:${PORT}`);
+// });
 const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => {
+
+app.listen(PORT, async () => {
   console.log(`Munin backend listening on http://localhost:${PORT}`);
+
+  try {
+    const publicUrl = await startTunnel(PORT);
+    console.log(`Cloudflare Tunnel: ${publicUrl}`);
+  } catch (err) {
+    console.warn(`Tunnel startup failed: ${err.message}`);
+  }
 });

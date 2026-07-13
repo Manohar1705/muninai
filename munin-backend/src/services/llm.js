@@ -1,3 +1,5 @@
+const fs = require("fs");
+const path = require("path");
 const { tokenize } = require("./keywordMatch");
 const { traceLlmCall } = require("./observability");
 
@@ -25,30 +27,20 @@ const VALID_MODULES = [
   "Infrastructure",
   "Unclassified",
 ];
+const extractionPromptTemplate = fs.readFileSync(
+  path.join(__dirname, "../prompts/extractionPrompt.txt"),
+  "utf8"
+);
 
+const systemPromptTemplate = fs.readFileSync(
+  path.join(__dirname, "../prompts/systemPrompt.txt"),
+  "utf8"
+);
 function buildExtractionPrompt(text, sourceLabel) {
-  return `You are Munin, an assistant that extracts reusable knowledge from a knowledge-transfer document or meeting transcript during an engineering handover.
-
-Source: "${sourceLabel}"
-
-Read the text below and extract distinct, reusable knowledge objects — things a new engineer would need to know (procedures, architecture decisions, gotchas, configuration details, ownership info, etc.). Do not include small talk, greetings, or filler.
-
-Text:
-"""
-${text.slice(0, 12000)}
-"""
-
-Respond with ONLY a raw JSON object (no markdown fences, no preamble) in exactly this shape:
-{"objects": [{"title": string, "description": string, "type": string, "module": string, "confidence": number}]}
-
-Rules:
-- "title": short (max 8 words), specific.
-- "description": 1-3 sentences, grounded ONLY in the text above. Never invent details not present in the source.
-- "type": one of "Procedure", "Architecture", "Gotcha", "Configuration", "Ownership", "Other".
-- "module": your best guess at which system area this belongs to. Choose ONE of exactly these values: ${VALID_MODULES.join(", ")}. Use "Unclassified" if unsure.
-- "confidence": a number from 0 to 1 reflecting how clearly the source supports this object.
-- If the text contains no extractable knowledge, return {"objects": []}.
-- Extract at most 12 objects. Prefer fewer, higher-quality objects over many trivial ones.`;
+  return extractionPromptTemplate
+    .replace("{{SOURCE_LABEL}}", sourceLabel)
+    .replace("{{TEXT}}", text.slice(0, 12000))
+    .replace("{{VALID_MODULES}}", VALID_MODULES.join(", "));
 }
 
 async function extractKnowledgeFromText(text, sourceLabel) {
@@ -129,21 +121,12 @@ description: ${k.description}
 source: ${k.source}`)
     .join("\n\n");
 
-  return `You are Munin, an assistant answering questions for an incoming engineering team during a knowledge-transfer (KT) transition.
-
-You must answer STRICTLY using the knowledge base excerpts provided below. Do not use outside knowledge, do not speculate, and do not invent details that aren't in the excerpts.
-
-Knowledge base excerpts:
-${context || "(no relevant excerpts found)"}
-
-Respond with ONLY a raw JSON object (no markdown fences, no preamble) in exactly this shape:
-{"covered": boolean, "answer": string, "sourceId": string|null}
-
-Rules:
-- If one or more excerpts answer the question, set "covered": true, write a concise 1-3 sentence answer grounded only in those excerpts, and set "sourceId" to the id of the single excerpt that best supports the answer.
-- If none of the excerpts answer the question, set "covered": false, "answer": "This hasn't been covered in KT yet — I've logged it as a gap.", and "sourceId": null.
-- Never fabricate a source id that isn't in the excerpt list.`;
+  return systemPromptTemplate.replace(
+    "{{CONTEXT}}",
+    context || "(no relevant excerpts found)"
+  );
 }
+
 
 async function askLlm(question, knowledgeObjects) {
   const candidates = shortlistCandidates(question, knowledgeObjects);
