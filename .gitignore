@@ -1,0 +1,9 @@
+.env
+node_modules
+*.db
+.DS_Store
+*.db-shm
+*.db-wal
+package-lock.json
+*.txt
+*.cmd
