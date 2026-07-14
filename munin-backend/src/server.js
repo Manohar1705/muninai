@@ -5,6 +5,13 @@ const cors = require("cors");
 const { initDb } = require("./db");
 const { notFound, errorHandler } = require("./middleware/errorHandler");
 
+// Must run before any route modules are required — some services (e.g.
+// readiness.js) prepare statements against tables like `readiness` at
+// module-load time, so the schema needs to exist first. This only worked
+// locally by accident because munin.db already had tables from prior runs;
+// a fresh deploy with an empty DB file would crash otherwise.
+initDb();
+
 const dashboardRoutes = require("./routes/dashboard");
 const sessionsRoutes = require("./routes/sessions");
 const knowledgeRoutes = require("./routes/knowledge");
@@ -17,7 +24,6 @@ const documentsRoutes = require("./routes/documents");
 const meetingsRoutes = require("./routes/meetings");
 const mediaRoutes = require("./routes/media");
 const { startTunnel } = require("./tunnel");
-initDb();
 
 const app = express();
 app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
