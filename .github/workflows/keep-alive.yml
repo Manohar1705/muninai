@@ -1,0 +1,21 @@
+name: Keep Render services awake
+
+on:
+  schedule:
+    # Every 10 minutes — Render's free web services sleep after 15 min idle.
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {} # lets you trigger it manually from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping backend health endpoint
+        run: curl -fsS https://muninai-backend-hgb8.onrender.com/api/health
+
+      # Only needed if the frontend is a Render Web Service. Render Static
+      # Sites are served from a CDN and never sleep, so this step is only
+      # a safety net — replace the URL below with your actual frontend URL.
+      - name: Ping frontend
+        run: curl -fsS https://muninai-frontend.onrender.com/
+        continue-on-error: true
