@@ -17,6 +17,8 @@ const { nanoid } = require("nanoid");
 const { db } = require("../db");
 const { isGroqConfigured, extractKnowledgeFromText, transcribeAudio } = require("../services/llm");
 const { bumpReadinessForKnowledgeObjects } = require("../services/readiness");
+const { guessModule } = require("../services/keywordMatch");
+const { listModules, ensureModule } = require("../services/modules");
 
 const router = express.Router();
 
@@ -75,7 +77,13 @@ router.post("/upload", upload.single("file"), async (req, res) => {
   try {
     const sessionId = `rec-${nanoid(8)}`;
     const now = new Date();
-    const primaryModule = knowledgeObjects[0]?.module || "Unclassified";
+
+    const primaryModule = knowledgeObjects[0]?.module || guessModule(trimmed, listModules());
+
+    ensureModule(primaryModule);
+    for (const k of knowledgeObjects) {
+      ensureModule(k.module);
+    }
     const sourceLabel = `${req.file.originalname} (recording upload)`;
 
     const insertSession = db.prepare(

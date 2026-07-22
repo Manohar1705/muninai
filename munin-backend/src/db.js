@@ -22,10 +22,11 @@ db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
 
 const SCHEMA = `
-CREATE TABLE IF NOT EXISTS engagement (
-  id INTEGER PRIMARY KEY CHECK (id = 1),
+CREATE TABLE IF NOT EXISTS engagements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
-  phase TEXT NOT NULL
+  phase TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS smes (
@@ -112,6 +113,18 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL DEFAULT 'New chat',
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS modules(
+  name TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS app_state (
   key TEXT PRIMARY KEY,
   value TEXT
@@ -122,6 +135,7 @@ CREATE TABLE IF NOT EXISTS meetings (
   bot_id TEXT,                  -- Recall.ai bot id, set once createBot() returns
   meeting_url TEXT NOT NULL,
   bot_name TEXT NOT NULL,
+  module TEXT,
   status TEXT NOT NULL,         -- joining | in_call | call_ended | done | error
   session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL, -- linked once transcript is processed (Step 5)
   error TEXT,
@@ -177,10 +191,10 @@ function seedIfEmpty() {
     `INSERT INTO activity (text, created_at) VALUES (@text, @created_at)`
   );
   const insertChat = db.prepare(
-    `INSERT INTO chat_messages (role, text, citation, is_gap) VALUES (@role, @text, @citation, @is_gap)`
+    `INSERT INTO chat_messages (role, text, citation, is_gap, conversation_id) VALUES (@role, @text, @citation, @is_gap, @conversation_id)`
   );
-  const insertSme = db.prepare(
-    `INSERT OR REPLACE INTO smes (name, role) VALUES (@name, @role)`
+  const insertConversation = db.prepare(
+    `INSERT INTO conversations (id, title) VALUES (@id, @title)`
   );
 
   // Helper: find which session a KO's source belongs to, and its timestamp
@@ -191,12 +205,15 @@ function seedIfEmpty() {
   }
 
   const seedTx = db.transaction(() => {
-    if (tableIsEmpty("engagement")) {
-      db.prepare(`INSERT INTO engagement (id, name, phase) VALUES (1, ?, ?)`).run(
-        ENGAGEMENT.name,
-        ENGAGEMENT.phase
-      );
-    }
+  if (tableIsEmpty("engagements")) {
+    db.prepare(`
+      INSERT INTO engagements (name, phase)
+      VALUES (?, ?)
+    `).run(
+      ENGAGEMENT.name,
+      ENGAGEMENT.phase
+    );
+  }
 
     if (tableIsEmpty("smes")) {
       for (const [name, role] of Object.entries(SME_ROLES)) {
@@ -255,14 +272,24 @@ function seedIfEmpty() {
         insertReadiness.run({ module, score });
       }
     }
+    if(tableIsEmpty("modules")) {
+      const insertModule = db.prepare(`INSERT OR IGNORE INTO modules (name) VALUES (?)`);
+      for(const [module] of Object.entries(READINESS_INITIAL)) {
+        insertModule.run(module);
+      }
+    }
 
     if (tableIsEmpty("activity")) {
       for (const a of ACTIVITY_SEED) insertActivity.run({ text: a.text, created_at: a.createdAt });
     }
 
+    if (tableIsEmpty("conversations")) {
+      insertConversation.run({ id: "conv-demo", title: "Demo Q&A" });
+    }
+ 
     if (tableIsEmpty("chat_messages")) {
       for (const m of CHAT_SEED) {
-        insertChat.run({ role: m.role, text: m.text, citation: m.citation, is_gap: m.isGap ? 1 : 0 });
+        insertChat.run({ role: m.role, text: m.text, citation: m.citation, is_gap: m.isGap ? 1 : 0, conversation_id: "conv-demo" });
       }
     }
 
@@ -276,10 +303,11 @@ function seedIfEmpty() {
 
 function resetDemoData() {
   const tables = [
-    "chat_messages", "activity", "readiness", "key_person_risk",
+    "chat_messages", "conversations", "modules", "activity", "readiness", "key_person_risk",
     "sme_contributions", "gaps", "kt_topics", "knowledge_objects",
-    "transcript_segments", "meeting_transcript_chunks", "meetings", "sessions", "smes", "engagement", "app_state",
+    "transcript_segments", "meeting_transcript_chunks", "meetings", "sessions", "smes", "engagements", "app_state",
   ];
+
   const resetTx = db.transaction(() => {
     for (const t of tables) db.prepare(`DELETE FROM ${t}`).run();
   });
@@ -298,15 +326,58 @@ function migrateSchema() {
     // -1 means "nothing processed yet" (chunk seq numbers start at 0).
     db.exec(`ALTER TABLE meetings ADD COLUMN last_extracted_seq INTEGER NOT NULL DEFAULT -1`);
   }
+  const meetingCols2 = db.prepare(`PRAGMA table_info(meetings)`).all().map((c) => c.name);
+  if (!meetingCols2.includes("meeting_title")) {
+    db.exec(`ALTER TABLE meetings ADD COLUMN meeting_title TEXT`);
+  }
   if (!meetingCols.includes("last_extracted_at")) {
     db.exec(`ALTER TABLE meetings ADD COLUMN last_extracted_at TEXT`);
   }
-}
+  const meetingCols3 = db.prepare(
+    `PRAGMA table_info(meetings)`
+  ).all().map((c) => c.name);
 
+  if (!meetingCols3.includes("module")) {
+    db.exec(`ALTER TABLE meetings ADD COLUMN module TEXT`);
+  }
+  const chatColsForConv = db.prepare(`PRAGMA table_info(chat_messages)`).all().map((c) => c.name);
+  if (!chatColsForConv.includes("conversation_id")) {
+    db.exec(`ALTER TABLE chat_messages ADD COLUMN conversation_id TEXT REFERENCES conversations(id) ON DELETE CASCADE`);
+    // Backfill: any messages that existed before this migration get grouped 
+    // into one "Earlier conversation" so nothing disappears from history.
+    const orphanCount = db.prepare(`SELECT COUNT(*) AS c FROM chat_messages WHERE conversation_id IS NULL`).get().c;
+    if (orphanCount > 0){
+      const legacyId = `conv-legacy-${Date.now().toString(36)}`;
+      db.prepare(`INSERT INTO conversations (id, title) VALUES (?, ?)`).run(legacyId, "Earlier conversation");
+      db.prepare(`UPDATE chat_messages SET conversation_id = ? WHERE conversation_id IS NULL`).run(legacyId);
+    }
+  }
+  const chatCols = db.prepare(`PRAGMA table_info(chat_messages)`).all().map((c) => c.name);
+  if (!chatCols.includes("citation_session_id")) {
+    db.exec(`ALTER TABLE chat_messages ADD COLUMN citation_session_id TEXT`);
+  }
+  if (!chatCols.includes("citation_timestamp")) {
+    db.exec(`ALTER TABLE chat_messages ADD COLUMN citation_timestamp TEXT`);
+  }
+ 
+  const conversationCols = db.prepare(`PRAGMA table_info(conversations)`).all().map((c) => c.name);
+  if (!conversationCols.includes("pinned")) {
+    db.exec(`ALTER TABLE conversations ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0`);
+  }
+  if (!conversationCols.includes("archived")) {
+    db.exec(`ALTER TABLE conversations ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
+  }
+  const meetingCols4 = db.prepare(
+    `PRAGMA table_info(meetings)`
+  ).all().map((c) => c.name);
+
+  if (!meetingCols4.includes("participants")) {
+    db.exec(`ALTER TABLE meetings ADD COLUMN participants TEXT`);
+  }
+}
 function initDb() {
   db.exec(SCHEMA);
   migrateSchema();
   seedIfEmpty();
 }
-
 module.exports = { db, initDb, resetDemoData };

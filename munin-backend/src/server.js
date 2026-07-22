@@ -23,14 +23,46 @@ const settingsRoutes = require("./routes/settings");
 const documentsRoutes = require("./routes/documents");
 const meetingsRoutes = require("./routes/meetings");
 const mediaRoutes = require("./routes/media");
+const engagementsRoutes = require("./routes/engagements");
+const modulesRoutes = require("./routes/modules");
 const { startTunnel } = require("./tunnel");
+initDb();
+const { db } = require("./db");
 
 const app = express();
+const clients = new Set();
 app.use(cors({ origin: process.env.CORS_ORIGIN || "*" }));
 app.use(express.json());
 
+app.get("/api/events", (req, res) => {
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+
+  clients.add(res);
+
+  req.on("close", () => {
+    clients.delete(res);
+  });
+});
+
+global.broadcastEvent = (eventName, data = {}) => {
+  for (const client of clients) {
+    client.write(
+      `data: ${JSON.stringify({
+        event: eventName,
+        data,
+      })}\n\n`
+    );
+  }
+};
+
 app.get("/api/health", (req, res) => {
-  res.json({ ok: true, service: "munin-backend", time: new Date().toISOString() });
+  res.json({
+    ok: true,
+    service: "munin-backend",
+    time: new Date().toISOString(),
+  });
 });
 
 app.use("/api/dashboard", dashboardRoutes);
@@ -44,7 +76,8 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/documents", documentsRoutes);
 app.use("/api/meetings", meetingsRoutes);
 app.use("/api/media", mediaRoutes);
-
+app.use("/api/engagements", engagementsRoutes);
+app.use("/api/modules", modulesRoutes);
 app.use(notFound);
 app.use(errorHandler);
 

@@ -1,4 +1,4 @@
-const { MODULES } = require("../data/seedData");
+// const { MODULES } = require("../data/seedData");
 
 const STOPWORDS = new Set([
   "the", "a", "an", "is", "are", "was", "were", "what", "how", "why", "when",
@@ -40,11 +40,27 @@ function findBestMatch(question, knowledgeObjects) {
   return null;
 }
 
-/** Best-effort guess at which module an uncovered question relates to. */
-function guessModule(question) {
-  const qLower = question.toLowerCase();
-  const found = MODULES.find((m) => qLower.includes(m.toLowerCase().split(" ")[0]));
-  return found || "General";
-}
 
+// knownModules lets callers pass the *current, dynamic* module list (from
+// services/modules.js) instead of always matching against the original
+// fixed six. If nothing matches an existing module, coins a short label
+// from the text's own keywords rather than a placeholder like "General".
+
+function guessModule(text, knownModules = []) {
+  if (!knownModules.length) {
+    return "Unclassified";
+  }
+
+  const qLower = text.toLowerCase();
+
+  const found = knownModules.find((m) =>
+    qLower.includes(m.toLowerCase().split(" ")[0])
+  );
+
+  if (found) {
+    return found;
+  }
+
+  return "Unclassified";
+}
 module.exports = { tokenize, findBestMatch, guessModule };

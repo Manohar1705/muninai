@@ -7,6 +7,8 @@ const { nanoid } = require("nanoid");
 const { db } = require("../db");
 const { isGroqConfigured, extractKnowledgeFromText } = require("../services/llm");
 const { bumpReadinessForKnowledgeObjects } = require("../services/readiness");
+const { guessModule } = require("../services/keywordMatch");
+const {ensureModule, listModules} = require("../services/modules");
 
 const router = express.Router();
 
@@ -79,12 +81,19 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 
     const sessionId = `doc-${nanoid(8)}`;
     const now = new Date();
-    const primaryModule = knowledgeObjects[0]?.module || "Unclassified";
+    const primaryModule = knowledgeObjects[0]?.module || guessModule(trimmed, listModules());
+    ensureModule(primaryModule);
+    
 
     const insertSession = db.prepare(
       `INSERT INTO sessions (id, num, module, title, date, duration, status, attendees, source_type)
        VALUES (@id, @num, @module, @title, @date, @duration, @status, @attendees, @source_type)`
     );
+
+    const insertSegment = db.prepare(
+      `INSERT INTO transcript_segments (session_id, seq, timestamp, speaker, text) VALUES (@session_id, @seq, @timestamp, @speaker, @text)`
+    );
+
     const insertKO = db.prepare(
       `INSERT INTO knowledge_objects (id, title, type, module, description, confidence, needs_review, source, session_id, segment_timestamp)
        VALUES (@id, @title, @type, @module, @description, @confidence, @needs_review, @source, @session_id, @segment_timestamp)`
@@ -107,13 +116,15 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         source_type: "document",
       });
 
+      insertSegment.run({ session_id: sessionId, seq: 0, timestamp: "00:00:00", speaker: "Document", text: trimmed });
+
       for (const k of knowledgeObjects) {
         const koId = `ko-${nanoid(8)}`;
         insertKO.run({
           id: koId,
           title: k.title,
           type: k.type,
-          module: k.module,
+          module: primaryModule,
           description: k.description,
           confidence: k.confidence,
           needs_review: k.confidence < 0.6 ? 1 : 0,

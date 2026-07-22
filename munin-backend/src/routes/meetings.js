@@ -8,12 +8,13 @@ const {
   leaveBot,
 } = require("../services/meetingBot");
 const { processMeetingChunks, isTerminalStatus, shouldRunIncrementalExtraction } = require("../services/meetingProcessor");
-
+const { ensureModule } = require("../services/modules");
+const { rebuildReadiness } = require("../services/readiness");
 const router = express.Router();
 
 const insertMeeting = db.prepare(
-  `INSERT INTO meetings (id, bot_id, meeting_url, bot_name, status)
-   VALUES (@id, @bot_id, @meeting_url, @bot_name, @status)`
+  `INSERT INTO meetings (id, bot_id, meeting_url, bot_name, meeting_title, status)
+   VALUES (@id, @bot_id, @meeting_url, @bot_name, @meeting_title, @status)`
 );
 const updateMeetingBotId = db.prepare(
   `UPDATE meetings SET bot_id = @bot_id, status = @status, updated_at = datetime('now') WHERE id = @id`
@@ -86,12 +87,14 @@ function formatTimestamp(totalSeconds) {
   return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
 }
 
+
 // GET /api/meetings
 // Lists all meetings, most recent first — lets the frontend restore the
 // Meetings page (in-progress calls, past ones) after a refresh instead of
 // only ever knowing about meetings joined in the current tab session.
 router.get("/", (req, res) => {
-  const meetings = db.prepare(`SELECT * FROM meetings ORDER BY created_at DESC`).all();
+  const meetings = db.prepare(`SELECT * FROM meetings ORDER BY created_at ASC`).all();
+  console.log("Meetings from DB:", meetings);
   res.json({ meetings });
 });
 
@@ -101,7 +104,12 @@ router.get("/", (req, res) => {
 // with status "error" so the UI can show what happened instead of the
 // request just vanishing.
 router.post("/join", async (req, res) => {
-  const { meetingUrl, botName } = req.body || {};
+  const { meetingUrl, botName, meetingTitle } = req.body || {};
+  if (!meetingTitle || !meetingTitle.trim()) {
+    return res.status(400).json({
+      error: "Meeting title is required."
+    });
+  }
 
   if (!meetingUrl || typeof meetingUrl !== "string" || !meetingUrl.trim()) {
     return res.status(400).json({ error: "meetingUrl is required." });
@@ -115,13 +123,15 @@ router.post("/join", async (req, res) => {
 
   const meetingId = `mtg-${nanoid(8)}`;
   const resolvedBotName = (botName && botName.trim()) || "Munin";
+  const resolvedMeetingTitle = meetingTitle.trim();
   const now = new Date().toISOString();
-
+ 
   insertMeeting.run({
     id: meetingId,
     bot_id: null,
     meeting_url: meetingUrl.trim(),
     bot_name: resolvedBotName,
+    meeting_title: resolvedMeetingTitle,
     status: "joining",
   });
 
@@ -140,6 +150,7 @@ router.post("/join", async (req, res) => {
         botId: bot.id,
         meetingUrl: meetingUrl.trim(),
         botName: resolvedBotName,
+        meetingTitle: resolvedMeetingTitle,
         status: "joining",
       },
     });
@@ -180,6 +191,10 @@ router.get("/:id/status", async (req, res) => {
     const bot = await getBotStatus(meeting.bot_id);
     // Recall's status_changes is an array of { code, created_at, ... };
     // the most recent entry's code is the bot's current state.
+    console.log(
+      "BOT STATUS CHANGES:",
+      JSON.stringify(bot.status_changes, null, 2)
+    );
     const latest = Array.isArray(bot.status_changes) && bot.status_changes.length
       ? bot.status_changes[bot.status_changes.length - 1].code
       : meeting.status;
@@ -197,10 +212,31 @@ router.get("/:id/status", async (req, res) => {
         // The bot status itself is still valid and already saved above —
         // only the knowledge extraction failed. Surface that separately
         // instead of masking a successful status refresh as a 502.
+        const recordingStart = bot.status_changes?.find(
+          (s) => s.code === "in_call_recording"
+        );
+
+        const callEnded = bot.status_changes?.find(
+          (s) => s.code === "call_ended"
+        );
+
+        let durationSeconds = null;
+
+        if (recordingStart && callEnded) {
+          durationSeconds = Math.floor(
+            (new Date(callEnded.created_at) -
+              new Date(recordingStart.created_at)) / 1000
+          );
+        }
+
         const fresh = getMeeting.get(meeting.id);
+
         return res.json({
-          meeting: { ...fresh, status: latest },
-          warning: `Meeting ended but knowledge extraction failed: ${err.message}`,
+          meeting: {
+            ...fresh,
+            status: latest,
+            durationSeconds,
+          },
         });
       }
     } else if (!isTerminalStatus(latest) && shouldRunIncrementalExtraction(meeting)) {
@@ -264,6 +300,22 @@ router.post("/webhook", (req, res) => {
       if (meeting) {
         const inner = data?.data || data;
         const name = inner?.participant?.name || "A participant";
+        const existingParticipants = JSON.parse(
+          meeting.participants || "[]"
+        );
+
+        if (!existingParticipants.includes(name)) {
+          existingParticipants.push(name);
+
+          db.prepare(`
+            UPDATE meetings
+            SET participants = ?
+            WHERE id = ?
+          `).run(
+            JSON.stringify(existingParticipants),
+            meeting.id
+          );
+        }
         const action = event.endsWith("join") ? "joined" : "left";
         insertActivity.run({
           text: `${name} ${action} the meeting Munin is in (${meeting.bot_name}).`,
@@ -316,5 +368,152 @@ router.post("/:id/leave", async (req, res) => {
     return res.status(502).json({ error: `Failed to remove bot from meeting: ${err.message}` });
   }
 });
+
+router.patch("/:id/module", (req, res) => {
+  const { module } = req.body;
+  const currentMeeting = db
+    .prepare(`SELECT module FROM meetings WHERE id = ?`)
+    .get(req.params.id);
+
+  const oldModule = currentMeeting?.module;
+  ensureModule(module);
+  // TODO:
+// Readiness should be rebuilt from knowledge_objects when a module is
+// reassigned. Current logic only transfers readiness scores between
+// modules and can become inaccurate after module edits.
+ 
+  if (oldModule && oldModule !== module) {
+    const oldReadiness = db
+      .prepare(`SELECT score FROM readiness WHERE module = ?`)
+      .get(oldModule);
+
+    const newReadiness = db
+      .prepare(`SELECT score FROM readiness WHERE module = ?`)
+      .get(module);
+
+    if (oldReadiness) {
+      db.prepare(`
+        UPDATE readiness
+        SET score = ?
+        WHERE module = ?
+      `).run(
+        Math.max(oldReadiness.score, newReadiness?.score || 0),
+        module
+      );
+
+      db.prepare(`
+        DELETE FROM readiness
+        WHERE module = ?
+      `).run(oldModule);
+    }
+  }
+  const result = db
+    .prepare(`
+      UPDATE meetings
+      SET module = ?
+      WHERE id = ?
+    `)
+    .run(module, req.params.id);
+  const meeting = db
+    .prepare(`SELECT session_id FROM meetings WHERE id = ?`)
+    .get(req.params.id);
+
+  if (meeting?.session_id) {
+    db.prepare(`
+      UPDATE sessions
+      SET module = ?
+      WHERE id = ?
+    `).run(module, meeting.session_id);
+  }
+  if (meeting?.session_id) {
+    db.prepare(`
+      UPDATE knowledge_objects
+      SET module = ?
+      WHERE session_id = ?
+    `).run(module, meeting.session_id);
+  }
+  if (oldModule && oldModule !== module) {
+  const usage = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM meetings WHERE module = ?) +
+      (SELECT COUNT(*) FROM sessions WHERE module = ?) +
+      (SELECT COUNT(*) FROM knowledge_objects WHERE module = ?) AS count
+  `).get(oldModule, oldModule, oldModule);
+
+  if (usage.count === 0) {
+    db.prepare(`
+      DELETE FROM modules
+      WHERE name = ?
+    `).run(oldModule);
+  }
+}
+  rebuildReadiness();
+  if (result.changes === 0) {
+    return res.status(404).json({
+      error: "Meeting not found",
+    });
+  }
+
+  console.log("Saving topic:", module);
+
+  res.json({
+    success: true,
+  });
+});
+
+router.delete("/:id", (req, res) => {
+  const meeting = getMeeting.get(req.params.id);
+
+  if (!meeting) {
+    return res.status(404).json({
+      error: "Meeting not found",
+    });
+  }
+
+  db.prepare(`
+    DELETE FROM meeting_transcript_chunks
+    WHERE bot_id = ?
+  `).run(meeting.bot_id);
+
+  if (meeting.session_id) {
+    db.prepare(`
+      DELETE FROM transcript_segments
+      WHERE session_id = ?
+    `).run(meeting.session_id);
+
+    db.prepare(`
+      DELETE FROM knowledge_objects
+      WHERE session_id = ?
+    `).run(meeting.session_id);
+
+    db.prepare(`
+      DELETE FROM sessions
+      WHERE id = ?
+    `).run(meeting.session_id);
+  }
+
+  db.prepare(`
+    DELETE FROM meetings
+    WHERE id = ?
+  `).run(meeting.id);
+  if (meeting.module) {
+    const usage = db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM meetings WHERE module = ?) +
+        (SELECT COUNT(*) FROM sessions WHERE module = ?) +
+        (SELECT COUNT(*) FROM knowledge_objects WHERE module = ?) AS count
+    `).get(meeting.module, meeting.module, meeting.module);
+
+    if (usage.count === 0) {
+      db.prepare(`
+        DELETE FROM modules
+        WHERE name = ?
+      `).run(meeting.module);
+    }
+  }
+  rebuildReadiness();
+  res.json({ success: true });
+});
+
 
 module.exports = router;

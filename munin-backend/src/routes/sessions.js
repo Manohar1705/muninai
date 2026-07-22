@@ -1,7 +1,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { SESSION_9, KNOWLEDGE_OBJECTS_SEED } = require("../data/seedData");
-
+const { ensureModule } = require("../services/modules");
 const router = express.Router();
 
 function serializeSession(row) {
@@ -121,6 +121,69 @@ router.post("/upload", (req, res) => {
     updatedReadiness: { "Customer Notifications": readinessRow.score },
     closedGapId: "g9",
   });
+});
+
+router.patch("/:id/module", (req, res) => {
+  const { module } = req.body;
+  const currentSession = db
+    .prepare(`SELECT module FROM sessions WHERE id = ?`)
+    .get(req.params.id);
+
+  const oldModule = currentSession?.module;
+  ensureModule(module);
+  const result = db
+    .prepare(`
+      UPDATE sessions
+      SET module = ?
+      WHERE id = ?
+    `)
+    .run(module, req.params.id);
+
+  if (result.changes === 0) {
+    return res.status(404).json({ error: "Session not found" });
+
+  }
+  db.prepare(`
+    UPDATE knowledge_objects
+    SET module = ?
+    WHERE session_id = ?
+  `).run(module, req.params.id);
+  if (oldModule && oldModule !== module) {
+    const oldReadiness = db
+      .prepare(`SELECT score FROM readiness WHERE module = ?`)
+      .get(oldModule);
+
+    const newReadiness = db
+      .prepare(`SELECT score FROM readiness WHERE module = ?`)
+      .get(module);
+
+    if (oldReadiness) {
+      db.prepare(`
+        UPDATE readiness
+        SET score = ?
+        WHERE module = ?
+      `).run(
+        Math.max(oldReadiness.score, newReadiness?.score || 0),
+        module
+      );
+
+     const remainingUsage =
+      db.prepare(`
+        SELECT COUNT(*) as count
+        FROM sessions
+        WHERE module = ?
+      `).get(oldModule);
+
+    if (remainingUsage.count === 0) {
+      db.prepare(`
+        DELETE FROM readiness
+        WHERE module = ?
+      `).run(oldModule);
+    }
+    }
+  }
+
+  res.json({ success: true });
 });
 
 module.exports = router;

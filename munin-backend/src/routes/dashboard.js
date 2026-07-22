@@ -1,11 +1,11 @@
 const express = require("express");
 const { db } = require("../db");
-const { MODULES } = require("../data/seedData");
+const { listModules } = require("../services/modules");
 
 const router = express.Router();
 
 router.get("/", (req, res) => {
-  const engagement = db.prepare(`SELECT name, phase FROM engagement WHERE id = 1`).get();
+  const engagements = db.prepare(`SELECT name, phase FROM engagements WHERE id = 1`).get();
 
   const sessionCount = db.prepare(`SELECT COUNT(*) AS c FROM sessions`).get().c;
   const segmentCount = db.prepare(`SELECT COUNT(*) AS c FROM transcript_segments`).get().c;
@@ -13,14 +13,20 @@ router.get("/", (req, res) => {
   const needsReviewCount = db.prepare(`SELECT COUNT(*) AS c FROM knowledge_objects WHERE needs_review = 1`).get().c;
   const totalGaps = db.prepare(`SELECT COUNT(*) AS c FROM gaps`).get().c;
   const openGaps = db.prepare(`SELECT COUNT(*) AS c FROM gaps WHERE status != 'Closed'`).get().c;
+  const readinessRows = db
+  .prepare(`SELECT module, score FROM readiness WHERE score > 0`)
+  .all();
 
-  const readinessRows = db.prepare(`SELECT module, score FROM readiness`).all();
   const readiness = {};
-  for (const m of MODULES) readiness[m] = 0;
-  for (const r of readinessRows) readiness[r.module] = r.score;
+
+  for (const r of readinessRows) {
+    readiness[r.module] = r.score;
+  }
+
+  const scores = Object.values(readiness);
 
   const overall = Math.round(
-    Object.values(readiness).reduce((a, b) => a + b, 0) / (MODULES.length || 1)
+    scores.reduce((a, b) => a + b, 0) / (scores.length || 1)
   );
 
   const activity = db
@@ -28,7 +34,7 @@ router.get("/", (req, res) => {
     .all();
 
   res.json({
-    engagement,
+    engagements,
     stats: {
       sessionsProcessed: sessionCount,
       transcriptSegments: segmentCount,

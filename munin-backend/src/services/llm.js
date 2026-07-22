@@ -1,7 +1,9 @@
 const fs = require("fs");
 const path = require("path");
-const { tokenize } = require("./keywordMatch");
+const { tokenize, guessModule } = require("./keywordMatch");
 const { traceLlmCall } = require("./observability");
+const {listModules} = require("./modules");
+// const { MODULES } = require("../data/seedData");
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 const GROQ_TRANSCRIPTION_URL = "https://api.groq.com/openai/v1/audio/transcriptions";
@@ -19,14 +21,9 @@ function isLlmConfigured() {
   return isGroqConfigured();
 }
 
-const VALID_MODULES = [
-  "Customer Notifications",
-  "Payments",
-  "Onboarding",
-  "Reporting",
-  "Infrastructure",
-  "Unclassified",
-];
+
+// const VALID_MODULES = [...MODULES, "Unclassified"];
+
 const extractionPromptTemplate = fs.readFileSync(
   path.join(__dirname, "../prompts/extractionPrompt.txt"),
   "utf8"
@@ -36,11 +33,19 @@ const systemPromptTemplate = fs.readFileSync(
   path.join(__dirname, "../prompts/systemPrompt.txt"),
   "utf8"
 );
+function sanitizeModule(raw) {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (/^(unclassified|n\/a|none|unknown|general)$/i.test(trimmed)) return null;
+  return trimmed.slice(0,60);
+}
 function buildExtractionPrompt(text, sourceLabel) {
+  const knownModules = listModules();
   return extractionPromptTemplate
     .replace("{{SOURCE_LABEL}}", sourceLabel)
     .replace("{{TEXT}}", text.slice(0, 12000))
-    .replace("{{VALID_MODULES}}", VALID_MODULES.join(", "));
+    .replace("{{VALID_MODULES}}", knownModules.length ? knownModules.join(", ") : "(none yet)");
 }
 
 async function extractKnowledgeFromText(text, sourceLabel) {
@@ -79,8 +84,16 @@ async function extractKnowledgeFromText(text, sourceLabel) {
     let parsed;
     try {
       parsed = JSON.parse(cleaned);
+      
     } catch (e) {
-      throw new Error(`Groq returned non-JSON output: ${raw.slice(0, 200)}`);
+      parsed = {
+        mode: "chat",
+        covered: false,
+        answer: cleaned || raw,
+        sourceId: null
+      };
+
+      
     }
 
     const objects = Array.isArray(parsed.objects) ? parsed.objects : [];
@@ -92,7 +105,8 @@ async function extractKnowledgeFromText(text, sourceLabel) {
         title: o.title.slice(0, 200),
         description: o.description.slice(0, 2000),
         type: typeof o.type === "string" ? o.type : "Other",
-        module: VALID_MODULES.includes(o.module) ? o.module : "Unclassified",
+        // module: VALID_MODULES.includes(o.module) ? o.module : guessModule(`${o.title} ${o.description}`),
+        module: sanitizeModule(o.module) || guessModule(`${o.title} ${o.description}`, listModules()),
         confidence: typeof o.confidence === "number" ? Math.max(0, Math.min(1, o.confidence)) : 0.5,
       }));
   });
@@ -102,7 +116,7 @@ async function extractKnowledgeFromText(text, sourceLabel) {
  * Cheaply narrows the full knowledge base down to a shortlist of candidate
  * objects so we don't ship the entire KB as context on every request.
  */
-function shortlistCandidates(question, knowledgeObjects, limit = 8) {
+function shortlistCandidates(question, knowledgeObjects, limit = 50) {
   const qWords = tokenize(question);
   const scored = knowledgeObjects.map((k) => {
     const haystack = `${k.title} ${k.description} ${k.module} ${k.type}`.toLowerCase();
@@ -111,29 +125,164 @@ function shortlistCandidates(question, knowledgeObjects, limit = 8) {
     return { k, score };
   });
   scored.sort((a, b) => b.score - a.score);
-  return scored.filter((s) => s.score > 0).slice(0, limit).map((s) => s.k);
+
+  // Always send some KT context, even when keyword matching is weak.
+  const matches = scored.filter((s) => s.score > 0);
+
+  if (matches.length > 0) {
+    return matches.slice(0, limit).map((s) => s.k);
+  }
+
+  return scored.slice(0, Math.min(limit, 30)).map((s) => s.k);
 }
 
-function buildSystemPrompt(candidates) {
+function buildSystemPrompt(candidates, dbContext = {}, conversationStats = {}) {
   const context = candidates
     .map((k, i) => `[${i + 1}] id=${k.id} module=${k.module} type=${k.type} title="${k.title}"
 description: ${k.description}
 source: ${k.source}`)
     .join("\n\n");
 
-  return systemPromptTemplate.replace(
-    "{{CONTEXT}}",
-    context || "(no relevant excerpts found)"
+const liveData = `
+Live Database Information:
+- Sessions Processed: ${dbContext.sessionCount ?? 0}
+- Meetings: ${dbContext.meetingCount ?? 0}
+- Open Gaps: ${dbContext.openGapCount ?? 0}
+- Modules: ${dbContext.moduleCount ?? 0}
+Conversation Information:
+- Total Messages: ${conversationStats.messageCount ?? 0}
+
+Recent User Topics:
+${(conversationStats.recentTopics || [])
+  .map(t => `- ${t.text}`)
+  .join("\n")}
+
+Top Readiness Scores:
+${(dbContext.readiness || [])
+  .map(r => `- ${r.module}: ${r.score}%`)
+  .join("\n")}
+
+Available Modules:
+${(dbContext.modules || [])
+  .map(m => `- ${m.name}`)
+  .join("\n")}
+
+Recent Sessions:
+${(dbContext.recentSessions || [])
+  .map(s => `- ${s.title} (${s.module})`)
+  .join("\n")}
+
+Recent Meetings:
+${(dbContext.recentMeetings || [])
+  .map(
+    m =>
+      `- ${m.meeting_title || "Untitled"} | ${m.status}`
+  )
+  .join("\n")}
+
+Engagement:
+${dbContext.engagement
+  ? `- ${dbContext.engagement.name} (${dbContext.engagement.phase})`
+  : "- No engagement found"}
+
+All Readiness Scores:
+${(dbContext.readinessDetails || [])
+  .map(r => `- ${r.module}: ${r.score}%`)
+  .join("\n")}
+
+Lowest Readiness Modules:
+${(dbContext.lowestReadiness || [])
+  .map(r => `- ${r.module}: ${r.score}%`)
+  .join("\n")}
+
+Recent Session Summary:
+${(dbContext.sessionSummary || [])
+  .map(s => `- ${s.title} (${s.module})`)
+  .join("\n")}
+
+Recent Gaps:
+${(dbContext.recentGaps || [])
+  .map(g => `- ${g.question} | ${g.module} | ${g.status}`)
+  .join("\n")}
+
+Gap Summary By Module:
+${(dbContext.gapSummary || [])
+  .map(g => `- ${g.module}: ${g.count}`)
+  .join("\n")}
+
+Modules:
+${(dbContext.moduleSummary || [])
+  .map(m => `- ${m.name}`)
+  .join("\n")}
+
+Meeting Summary:
+${(dbContext.meetingSummary || [])
+  .map(m => `- ${m.meeting_title} (${m.status})`)
+  .join("\n")}
+
+Readiness Summary:
+${(dbContext.readinessSummary || [])
+  .map(r => `- ${r.module}: ${r.score}%`)
+  .join("\n")}
+`;
+
+
+
+  return (
+    systemPromptTemplate
+      .replace("{{CONTEXT}}", context || "(no relevant excerpts found)") +
+    `
+
+  IMPORTANT:
+  The "Live Database Information" section below contains the current state of the system and is authoritative.
+
+  When the user asks about:
+  - readiness
+  - readiness scores
+  - readiness status
+  - dashboard
+  - meetings
+  - sessions
+  - engagement
+  - gaps
+  - modules
+
+  ALWAYS prioritize the Live Database Information.
+
+  If database information directly answers the question:
+  - answer from the database
+  - do not say information is unavailable
+  - do not prefer KT excerpts over database values
+  - use the exact values provided in the database context
+
+  Questions about dashboard should be answered using:
+  - readiness scores
+  - session counts
+  - meeting counts
+  - open gaps
+  - modules
+  - engagement information
+
+  ` +
+    liveData
   );
 }
 
 
-async function askLlm(question, knowledgeObjects) {
-  const candidates = shortlistCandidates(question, knowledgeObjects);
-  const system = buildSystemPrompt(candidates);
+async function askLlm(question, knowledgeObjects, history = [], dbContext = {}, conversationStats = {}) {
+  const candidates = shortlistCandidates(question, knowledgeObjects, 25);
+  const system = buildSystemPrompt(candidates, dbContext, conversationStats);
   const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
-
-  return traceLlmCall({ name: "ask-munin", input: question, metadata: { model, candidateCount: candidates.length } }, async () => {
+ 
+  // Prior turns are sent as real chat messages (not text stuffed into the
+  // system prompt) so the model can naturally resolve follow-ups like "in
+  // brief" or "the same" against what was actually said.
+  const historyMessages = history.map((h) => ({
+    role: h.role === "assistant" ? "assistant" : "user",
+    content: h.text,
+  }));
+ 
+  return traceLlmCall({ name: "ask-munin", input: question, metadata: { model, candidateCount: candidates.length, historyTurns: history.length } }, async () => {
     const response = await fetch(GROQ_API_URL, {
       method: "POST",
       headers: {
@@ -142,42 +291,48 @@ async function askLlm(question, knowledgeObjects) {
       },
       body: JSON.stringify({
         model,
-        max_tokens: 400,
+        max_tokens: 800,
         temperature: 0.2,
         response_format: { type: "json_object" },
         messages: [
           { role: "system", content: system },
+          ...historyMessages,
           { role: "user", content: question },
         ],
       }),
     });
-
+ 
     if (!response.ok) {
       const errText = await response.text().catch(() => "");
       throw new Error(`Groq API error ${response.status}: ${errText}`);
     }
-
+ 
     const data = await response.json();
     const text = (data.choices?.[0]?.message?.content || "").trim();
-
+ 
     const cleaned = text.replace(/^```json/i, "").replace(/```$/, "").trim();
     let parsed;
     try {
       parsed = JSON.parse(cleaned);
     } catch (e) {
-      // If the model didn't return clean JSON, fail safe into "not covered"
-      // so the caller falls back to gap-logging behavior.
-      return { covered: false, answer: "This hasn't been covered in KT yet — I've logged it as a gap.", sourceId: null };
+      return {
+        mode: "kt",
+        covered: false,
+        answer: "I couldn't find information about this in the current KT knowledge base.",
+        sourceId: null
+      };
     }
-
+ 
     if (parsed.covered && parsed.sourceId) {
       const match = knowledgeObjects.find((k) => k.id === parsed.sourceId);
-      if (!match) {
-        // Model hallucinated a source id — don't trust the answer.
-        return { covered: false, answer: "This hasn't been covered in KT yet — I've logged it as a gap.", sourceId: null };
+
+      if (match) {
+        parsed.sourceId = match.id;
+      } else {
+        parsed.sourceId = null;
       }
     }
-
+ 
     return parsed;
   });
 }

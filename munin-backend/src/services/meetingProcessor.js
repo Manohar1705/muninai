@@ -20,6 +20,8 @@ const { nanoid } = require("nanoid");
 const { db } = require("../db");
 const { isGroqConfigured, extractKnowledgeFromText } = require("./llm");
 const { bumpReadinessForKnowledgeObjects } = require("./readiness");
+const { guessModule } = require("./keywordMatch");
+const { listModules} = require("./modules");
 
 const TERMINAL_STATUSES = new Set(["call_ended", "done"]);
 function isTerminalStatus(status) {
@@ -49,6 +51,14 @@ function formatTimestamp(totalSeconds) {
   const m = Math.floor((totalSeconds % 3600) / 60);
   const s = Math.floor(totalSeconds % 60);
   return [h, m, s].map((n) => String(n).padStart(2, "0")).join(":");
+}
+function resolveSessionTitle(meeting) {
+  if (meeting.meeting_title) return meeting.meeting_title;
+  const when = new Date(meeting.created_at);
+  const formatted = isNaN(when.getTime())
+    ? "Live meeting"
+    : when.toLocaleString("en-IN", { timeZone: "Asia/Kolkata", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return `Meeting — ${formatted}`;
 }
 
 const getMeetingById = db.prepare(`SELECT * FROM meetings WHERE id = ?`);
@@ -135,16 +145,29 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
   const isFirstPass = !meeting.session_id;
   const sessionId = meeting.session_id || `mtg-sess-${nanoid(8)}`;
   const sourceLabel = `${meeting.bot_name} (live meeting)`;
-  const primaryModule = knowledgeObjects[0]?.module || "Unclassified";
-
+  const meetingTopic =
+    meeting.meeting_title?.trim() ||
+    guessModule(transcriptText, listModules());
+  db.prepare(`
+    UPDATE meetings
+    SET module = ?
+    WHERE id = ?
+  `).run(meetingTopic, meeting.id);
+  if (meeting.session_id) {
+    db.prepare(`
+      UPDATE sessions
+      SET module = ?
+      WHERE id = ?
+    `).run(meetingTopic, meeting.session_id);
+  }
   const savedKOs = [];
   const tx = db.transaction(() => {
     if (isFirstPass) {
       insertSession.run({
         id: sessionId,
         num: nextNum.get().n,
-        module: primaryModule,
-        title: `${meeting.bot_name} (meeting)`,
+        module: meetingTopic,
+        title: resolveSessionTitle(meeting),
         date: now.toISOString().slice(0, 10),
         duration: "N/A",
         status: finalize ? "Complete" : "In Progress",
@@ -173,7 +196,7 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
         id: koId,
         title: k.title,
         type: k.type,
-        module: k.module,
+        module: meetingTopic,
         description: k.description,
         confidence: k.confidence,
         needs_review: k.confidence < 0.6 ? 1 : 0,
@@ -181,7 +204,7 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
         session_id: sessionId,
         segment_timestamp: null,
       });
-      savedKOs.push({ id: koId, ...k, needsReview: k.confidence < 0.6, source: sourceLabel });
+      savedKOs.push({ id: koId, ...k, module: meetingTopic, needsReview: k.confidence < 0.6, source: sourceLabel });
     }
 
     // Refresh attendees from the full chunk history each pass — cheap, and
