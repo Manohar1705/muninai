@@ -8,13 +8,13 @@ const {
   leaveBot,
 } = require("../services/meetingBot");
 const { processMeetingChunks, isTerminalStatus, shouldRunIncrementalExtraction } = require("../services/meetingProcessor");
-const { ensureModule } = require("../services/modules");
+const { ensureModule, listModules } = require("../services/modules");
 const { rebuildReadiness } = require("../services/readiness");
 const router = express.Router();
 
 const insertMeeting = db.prepare(
-  `INSERT INTO meetings (id, bot_id, meeting_url, bot_name, meeting_title, status)
-   VALUES (@id, @bot_id, @meeting_url, @bot_name, @meeting_title, @status)`
+  `INSERT INTO meetings (id, bot_id, meeting_url, bot_name, meeting_title, status, engagement_id)
+   VALUES (@id, @bot_id, @meeting_url, @bot_name, @meeting_title, @status, @engagement_id)`
 );
 const updateMeetingBotId = db.prepare(
   `UPDATE meetings SET bot_id = @bot_id, status = @status, updated_at = datetime('now') WHERE id = @id`
@@ -88,23 +88,25 @@ function formatTimestamp(totalSeconds) {
 }
 
 
-// GET /api/meetings
+// GET /api/meetings?engagementId=1
 // Lists all meetings, most recent first — lets the frontend restore the
 // Meetings page (in-progress calls, past ones) after a refresh instead of
 // only ever knowing about meetings joined in the current tab session.
 router.get("/", (req, res) => {
-  const meetings = db.prepare(`SELECT * FROM meetings ORDER BY created_at ASC`).all();
-  console.log("Meetings from DB:", meetings);
+  const engagementId = req.query.engagementId ? Number(req.query.engagementId) : null;
+  const meetings = engagementId
+    ? db.prepare(`SELECT * FROM meetings WHERE engagement_id = ? ORDER BY created_at ASC`).all(engagementId)
+    : db.prepare(`SELECT * FROM meetings ORDER BY created_at ASC`).all();
   res.json({ meetings });
 });
 
-// POST /api/meetings/join  { meetingUrl, botName? }
+// POST /api/meetings/join  { meetingUrl, botName?, meetingTitle, engagementId }
 // Creates a row in `meetings` immediately (status "joining"), then calls
 // Recall.ai to actually send the bot. If Recall.ai fails, the row is kept
 // with status "error" so the UI can show what happened instead of the
 // request just vanishing.
 router.post("/join", async (req, res) => {
-  const { meetingUrl, botName, meetingTitle } = req.body || {};
+  const { meetingUrl, botName, meetingTitle, engagementId } = req.body || {};
   if (!meetingTitle || !meetingTitle.trim()) {
     return res.status(400).json({
       error: "Meeting title is required."
@@ -113,6 +115,10 @@ router.post("/join", async (req, res) => {
 
   if (!meetingUrl || typeof meetingUrl !== "string" || !meetingUrl.trim()) {
     return res.status(400).json({ error: "meetingUrl is required." });
+  }
+
+  if (!engagementId) {
+    return res.status(400).json({ error: "engagementId is required." });
   }
 
   if (!isRecallConfigured()) {
@@ -133,6 +139,7 @@ router.post("/join", async (req, res) => {
     bot_name: resolvedBotName,
     meeting_title: resolvedMeetingTitle,
     status: "joining",
+    engagement_id: Number(engagementId),
   });
 
   try {
@@ -369,96 +376,58 @@ router.post("/:id/leave", async (req, res) => {
   }
 });
 
+// PATCH /api/meetings/:id/module — reclassifies a meeting (and its derived
+// session + knowledge objects, if any). Restricted to the meeting's own
+// engagement's defined module list (or "Unclassified") — Munin only ever
+// puts a meeting into one of the modules an engagement has actually defined.
 router.patch("/:id/module", (req, res) => {
-  const { module } = req.body;
+  const { module } = req.body || {};
   const currentMeeting = db
-    .prepare(`SELECT module FROM meetings WHERE id = ?`)
+    .prepare(`SELECT module, engagement_id, session_id FROM meetings WHERE id = ?`)
     .get(req.params.id);
 
-  const oldModule = currentMeeting?.module;
-  ensureModule(module);
-  // TODO:
-// Readiness should be rebuilt from knowledge_objects when a module is
-// reassigned. Current logic only transfers readiness scores between
-// modules and can become inaccurate after module edits.
- 
-  if (oldModule && oldModule !== module) {
-    const oldReadiness = db
-      .prepare(`SELECT score FROM readiness WHERE module = ?`)
-      .get(oldModule);
-
-    const newReadiness = db
-      .prepare(`SELECT score FROM readiness WHERE module = ?`)
-      .get(module);
-
-    if (oldReadiness) {
-      db.prepare(`
-        UPDATE readiness
-        SET score = ?
-        WHERE module = ?
-      `).run(
-        Math.max(oldReadiness.score, newReadiness?.score || 0),
-        module
-      );
-
-      db.prepare(`
-        DELETE FROM readiness
-        WHERE module = ?
-      `).run(oldModule);
-    }
+  if (!currentMeeting) {
+    return res.status(404).json({ error: "Meeting not found" });
   }
-  const result = db
-    .prepare(`
-      UPDATE meetings
-      SET module = ?
-      WHERE id = ?
-    `)
-    .run(module, req.params.id);
-  const meeting = db
-    .prepare(`SELECT session_id FROM meetings WHERE id = ?`)
-    .get(req.params.id);
 
-  if (meeting?.session_id) {
-    db.prepare(`
-      UPDATE sessions
-      SET module = ?
-      WHERE id = ?
-    `).run(module, meeting.session_id);
+  const trimmedModule = String(module || "").trim();
+  if (!trimmedModule) {
+    return res.status(400).json({ error: "module is required" });
   }
-  if (meeting?.session_id) {
-    db.prepare(`
-      UPDATE knowledge_objects
-      SET module = ?
-      WHERE session_id = ?
-    `).run(module, meeting.session_id);
-  }
-  if (oldModule && oldModule !== module) {
-  const usage = db.prepare(`
-    SELECT
-      (SELECT COUNT(*) FROM meetings WHERE module = ?) +
-      (SELECT COUNT(*) FROM sessions WHERE module = ?) +
-      (SELECT COUNT(*) FROM knowledge_objects WHERE module = ?) AS count
-  `).get(oldModule, oldModule, oldModule);
 
-  if (usage.count === 0) {
-    db.prepare(`
-      DELETE FROM modules
-      WHERE name = ?
-    `).run(oldModule);
-  }
-}
-  rebuildReadiness();
-  if (result.changes === 0) {
-    return res.status(404).json({
-      error: "Meeting not found",
+  const allowedNames = listModules(currentMeeting.engagement_id).map((m) => m.name);
+  if (trimmedModule !== "Unclassified" && !allowedNames.includes(trimmedModule)) {
+    return res.status(400).json({
+      error: `"${trimmedModule}" is not a defined module for this engagement. Add it under Engagement Setup first, or choose an existing module.`,
     });
   }
 
-  console.log("Saving topic:", module);
+  const oldModule = currentMeeting.module;
 
-  res.json({
-    success: true,
-  });
+  db.prepare(`UPDATE meetings SET module = ? WHERE id = ?`).run(trimmedModule, req.params.id);
+
+  if (currentMeeting.session_id) {
+    db.prepare(`UPDATE sessions SET module = ? WHERE id = ?`).run(trimmedModule, currentMeeting.session_id);
+    db.prepare(`UPDATE knowledge_objects SET module = ? WHERE session_id = ?`).run(trimmedModule, currentMeeting.session_id);
+  }
+
+  // Drop the old module if it's now unused within this engagement — keeps
+  // the module list free of orphans left over from auto-classification.
+  if (oldModule && oldModule !== trimmedModule && oldModule !== "Unclassified") {
+    const usage = db.prepare(`
+      SELECT
+        (SELECT COUNT(*) FROM meetings WHERE module = ? AND engagement_id = ?) +
+        (SELECT COUNT(*) FROM sessions WHERE module = ? AND engagement_id = ?) AS count
+    `).get(oldModule, currentMeeting.engagement_id, oldModule, currentMeeting.engagement_id);
+
+    if (usage.count === 0) {
+      db.prepare(`DELETE FROM modules WHERE name = ? AND engagement_id = ?`).run(oldModule, currentMeeting.engagement_id);
+    }
+  }
+
+  rebuildReadiness();
+
+  res.json({ success: true, module: trimmedModule });
 });
 
 router.delete("/:id", (req, res) => {
@@ -499,16 +468,15 @@ router.delete("/:id", (req, res) => {
   if (meeting.module) {
     const usage = db.prepare(`
       SELECT
-        (SELECT COUNT(*) FROM meetings WHERE module = ?) +
-        (SELECT COUNT(*) FROM sessions WHERE module = ?) +
-        (SELECT COUNT(*) FROM knowledge_objects WHERE module = ?) AS count
-    `).get(meeting.module, meeting.module, meeting.module);
+        (SELECT COUNT(*) FROM meetings WHERE module = ? AND engagement_id = ?) +
+        (SELECT COUNT(*) FROM sessions WHERE module = ? AND engagement_id = ?) AS count
+    `).get(meeting.module, meeting.engagement_id, meeting.module, meeting.engagement_id);
 
     if (usage.count === 0) {
       db.prepare(`
         DELETE FROM modules
-        WHERE name = ?
-      `).run(meeting.module);
+        WHERE name = ? AND engagement_id = ?
+      `).run(meeting.module, meeting.engagement_id);
     }
   }
   rebuildReadiness();

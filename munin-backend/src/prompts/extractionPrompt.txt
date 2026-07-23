@@ -10,7 +10,7 @@ Text:
 """
 
 Respond with ONLY a raw JSON object (no markdown fences, no preamble) in exactly this shape:
-{"objects": [{"title": string, "description": string, "type": string, "module": string, "confidence": number}]}
+{"objects": [{"title": string, "description": string, "type": string, "module": string, "confidence": number, "speaker": string|null}]}
 
 Rules:
 - "title": short (max 8 words), specific.
@@ -48,6 +48,12 @@ Do NOT:
   - Miscellaneous
   - Other
   - Overview
+
+Rules for "speaker":
+- The text may be labeled dialogue, where each line starts with "Name: " (a meeting transcript). If so, and the fact is clearly and primarily something ONE specific named speaker said, set "speaker" to that exact name as it appears in the text.
+- If the fact is a shared conclusion multiple speakers reached together, or you cannot confidently attribute it to one speaker, set "speaker" to null.
+- If the text has no speaker labels at all (e.g. a plain document), always set "speaker" to null.
+- Never invent a speaker name that doesn't literally appear in the text.
 
 Prefer:
 - football instead of Sports Overview

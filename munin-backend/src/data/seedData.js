@@ -21,6 +21,7 @@ const ENGAGEMENT = {
   name: "Nova Payments Platform — Transition to New Vendor",
   phase: "Reverse Shadow",
   phases: PHASES,
+  details: "Knowledge transition engagement covering the migration of Nova's payments platform from the incumbent vendor to the new operating team.",
 };
 
 const READINESS_INITIAL = {

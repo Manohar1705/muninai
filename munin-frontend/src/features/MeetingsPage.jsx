@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import {
   C,
@@ -16,6 +17,7 @@ import {
   api,
   normalizeMeeting,
   apiRequest,
+  invalidateEngagementScopedQueries,
 } from "../api";
 /* ============================== MEETINGS ============================== */
 const MEETING_TERMINAL = new Set(["call_ended", "done", "error", "fatal"]);
@@ -36,7 +38,8 @@ function meetingStatusMeta(status) {
   return map[status] || { label: status || "Unknown", tone: "default" };
 }
 
-function Meetings({ meetings, setMeetings, refreshAfterProcessing, goToSession, configStatus }) {
+function Meetings({ meetings, setMeetings, refreshAfterProcessing, goToSession, configStatus, engagementId, modules }) {
+  const queryClient = useQueryClient();
   const [url, setUrl] = useState("");
   const [botName, setBotName] = useState("Munin");
   const [meetingTitle, setMeetingTitle] = useState("");
@@ -78,10 +81,14 @@ function Meetings({ meetings, setMeetings, refreshAfterProcessing, goToSession, 
   const handleJoin = async (e) => {
     e.preventDefault();
     if (!url.trim() || joining) return;
+    if (!engagementId) {
+      setJoinError("No engagement selected.");
+      return;
+    }
     setJoining(true);
     setJoinError(null);
     try {
-      const res = await api.joinMeeting(url.trim(), botName.trim() || "Munin", meetingTitle.trim());
+      const res = await api.joinMeeting(url.trim(), botName.trim() || "Munin", meetingTitle.trim(), engagementId);
       const meeting = res.data?.meeting ? normalizeMeeting(res.data.meeting) : null;
       if (meeting) {
         setMeetings((prev) => [meeting, ...prev]);
@@ -216,88 +223,71 @@ function Meetings({ meetings, setMeetings, refreshAfterProcessing, goToSession, 
                             {participants.join(", ")}
                           </div>
                         )}
-                        <div style={{ marginTop: 8 }}>
+                        <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                           <Pill tone="amber">
-                            {m.module || "No topic assigned"}
+                            {m.module || "Unclassified"}
                           </Pill>
+                          {/* Classification is restricted to this engagement's
+                              defined modules (or "Unclassified") — the backend
+                              rejects anything else, so this is never a free-text
+                              field. New modules are defined on Engagement Setup. */}
+                          <select
+                            value={m.module || "Unclassified"}
+                            onChange={async (e) => {
+                              const newModule = e.target.value;
+                              const previous = m.module;
+                              setMeetings((prev) => prev.map((meeting) => (meeting.id === m.id ? { ...meeting, module: newModule } : meeting)));
+                              try {
+                                await api.updateMeetingModule(m.id, newModule);
+                                // Reclassifying shifts completed-session counts
+                                // between modules (and can drop an orphaned
+                                // module), so the Dashboard/SME map/Engagement
+                                // Setup all need fresh data, not just this list.
+                                invalidateEngagementScopedQueries(queryClient, engagementId);
+                              } catch (err) {
+                                console.error(err);
+                                alert(err.message || "Failed to update meeting module.");
+                                setMeetings((prev) => prev.map((meeting) => (meeting.id === m.id ? { ...meeting, module: previous } : meeting)));
+                              }
+                            }}
+                            style={{
+                              background: C.bgRaised,
+                              border: `1px solid ${C.border}`,
+                              color: C.text,
+                              borderRadius: 6,
+                              padding: "4px 8px",
+                              fontSize: 12,
+                              fontFamily: FF.sans,
+                            }}
+                          >
+                            <option value="Unclassified">Unclassified</option>
+                            {modules.map((mod) => (
+                              <option key={mod} value={mod}>{mod}</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm("Delete this meeting and all related data?")) return;
+                              try {
+                                await apiRequest(`/meetings/${m.id}`, { method: "DELETE" });
+                                setMeetings((prev) => prev.filter((meeting) => meeting.id !== m.id));
+                              } catch (err) {
+                                console.error(err);
+                                alert("Failed to delete meeting");
+                              }
+                            }}
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              color: C.red,
+                              cursor: "pointer",
+                              fontSize: 12,
+                              padding: 0,
+                            }}
+                          >
+                            🗑 Delete
+                          </button>
                         </div>
-                    {/* <button
-                      onClick={async () => {
-                        const newTopic = prompt(
-                          "Edit meeting topic",
-                          m.module || ""
-                        );
-
-                        if (!newTopic || !newTopic.trim()) return;
-
-                        try {
-                          await api.updateMeetingModule(
-                            m.id,
-                            newTopic.trim()
-                          );
-
-                          setMeetings((prev) =>
-                            prev.map((meeting) =>
-                              meeting.id === m.id
-                                ? { ...meeting, module: newTopic.trim() }
-                                : meeting
-                            )
-                          );
-                        } catch (err) {
-                          console.error(err);
-                          alert("Failed to update meeting topic");
-                        }
-                      }}
-                      style={{
-                        marginTop: 6,
-                        background: "transparent",
-                        border: "none",
-                        color: C.amber,
-                        cursor: "pointer",
-                        fontSize: 12,
-                        padding: 0,
-                      }}
-                    >
-                      ✏ Edit Topic
-                    </button>
-                    <button
-                      onClick={async () => {
-                        if (
-                          !window.confirm(
-                            "Delete this meeting and all related data?"
-                          )
-                        ) {
-                          return;
-                        }
-
-                        try {
-                          await apiRequest(`/meetings/${m.id}`, {
-                            method: "DELETE",
-                          });
-
-                          setMeetings((prev) =>
-                            prev.filter(
-                              (meeting) => meeting.id !== m.id
-                            )
-                          );
-                        } catch (err) {
-                          console.error(err);
-                          alert("Failed to delete meeting");
-                        }
-                      }}
-                      style={{
-                        marginTop: 6,
-                        marginLeft: 10,
-                        background: "transparent",
-                        border: "none",
-                        color: "#d13438",
-                        cursor: "pointer",
-                        fontSize: 12,
-                        padding: 0,
-                      }}
-                    >
-                      🗑 Delete
-                    </button> */}
                       </div>
                     </div>
                     {m.error && (

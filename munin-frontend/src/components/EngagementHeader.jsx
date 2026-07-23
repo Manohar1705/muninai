@@ -1,5 +1,5 @@
 import React from "react";
-import { C } from "./common";
+import { C, Icon, icons } from "./common";
 import { PHASES } from "../constants";
 /* ============================== ENGAGEMENT HEADER ============================== */
 function PhaseTracker({ current }) {
@@ -22,15 +22,32 @@ function PhaseTracker({ current }) {
     </div>
   );
 }
-function EngagementHeader({ engagementName }) { 
+function EngagementHeader({ engagementName, engagementPhase, onSwitchEngagement }) { 
   return (
     <div style={{ padding: "22px 32px 18px", borderBottom: `1px solid ${C.border}` }}>
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <div>
           <div style={{ fontSize: 11, color: C.textFaint, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>Engagement</div>
           <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>{engagementName || "Unnamed Engagement"}</h1>
         </div>
-        <PhaseTracker current="Reverse Shadow" />
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 12 }}>
+          {onSwitchEngagement && (
+            <button
+              onClick={onSwitchEngagement}
+              title="Leave this engagement and return to the engagement selector"
+              style={{
+                display: "flex", alignItems: "center", gap: 6, background: "transparent",
+                border: `1px solid ${C.borderStrong}`, borderRadius: 7, padding: "6px 12px",
+                color: C.textMuted, fontSize: 12, cursor: "pointer", fontFamily: "inherit",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = C.text; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = C.textMuted; e.currentTarget.style.borderColor = C.borderStrong; }}
+            >
+              <Icon d={icons.logOut} size={13} /> Switch engagement
+            </button>
+          )}
+          <PhaseTracker current={engagementPhase || PHASES[0]} />
+        </div>
       </div>
     </div>
   );

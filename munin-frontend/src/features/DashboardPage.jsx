@@ -8,6 +8,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
+  LabelList,
 } from "recharts";
 
 import {
@@ -19,6 +20,7 @@ import {
   icons,
   btnPrimary,
   btnGhost,
+  ProgressBar,
 } from "../components/common";
 
 /* ============================== DASHBOARD ============================== */
@@ -31,13 +33,33 @@ function StatCard({ label, value, sub }) {
     </Card>
   );
 }
+// Renders "2 / 6 sessions" next to each bar instead of a bare percentage —
+// the percentage alone (e.g. "33") has no functional meaning on its own.
+function SessionCountLabel({ x, y, width, height, value, completed, planned }) {
+  if (value === undefined) return null;
+  return (
+    <text
+      x={x + width + 8}
+      y={y + height / 2}
+      dy={4}
+      fontSize={11}
+      fontFamily={FF.mono}
+      fill={C.textFaint}
+    >
+      {completed}/{planned}
+    </text>
+  );
+}
+
 function ReadinessChart({ readiness }) {
   const [page, setPage] = useState(0);
 
   const data = Object.keys(readiness)
     .map((m) => ({
       module: m,
-      value: readiness[m],
+      value: readiness[m]?.pct ?? 0,
+      completed: readiness[m]?.completed ?? 0,
+      planned: readiness[m]?.planned ?? 0,
     }))
     .sort((a, b) => b.value - a.value);
 
@@ -54,7 +76,7 @@ function ReadinessChart({ readiness }) {
         <BarChart
           data={pagedData}
           layout="vertical"
-          margin={{ left: 4, right: 24, top: 4, bottom: 4 }}
+          margin={{ left: 4, right: 48, top: 4, bottom: 4 }}
         >
           <CartesianGrid
             strokeDasharray="3 3"
@@ -98,6 +120,10 @@ function ReadinessChart({ readiness }) {
             }}
             labelStyle={{ color: C.text }}
             itemStyle={{ color: C.text }}
+            formatter={(value, name, props) => [
+              `${props.payload.completed} / ${props.payload.planned} sessions (${value}%)`,
+              "Coverage",
+            ]}
           />
 
           <Bar
@@ -112,6 +138,14 @@ function ReadinessChart({ readiness }) {
                 fillOpacity={0.35 + (d.value / 100) * 0.65}
               />
             ))}
+            <LabelList
+              dataKey="value"
+              content={(props) => {
+                const d = pagedData[props.index];
+                if (!d) return null;
+                return <SessionCountLabel {...props} completed={d.completed} planned={d.planned} />;
+              }}
+            />
           </Bar>
         </BarChart>
       </ResponsiveContainer>
@@ -159,6 +193,15 @@ function ReadinessChart({ readiness }) {
 function Dashboard({ stats, readiness, activity, setPage }) {
   return (
     <div style={{ padding: "26px 32px 48px" }}>
+      <Card style={{ padding: "18px 20px", marginBottom: 20 }}>
+        <ProgressBar
+          value={stats.overallReadiness}
+          label="Engagement coverage — sessions completed vs. planned"
+          sub={`${stats.completedSessions} / ${stats.plannedSessions} sessions`}
+          height={10}
+        />
+      </Card>
+
       <div style={{ display: "flex", gap: 14, marginBottom: 28, flexWrap: "wrap" }}>
         <StatCard
           label="Modules covered"

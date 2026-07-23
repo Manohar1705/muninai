@@ -16,26 +16,94 @@ import {
   Routes,
   Route,
   Navigate,
+  useNavigate,
+  useLocation,
 } from "react-router-dom";
 import { api, API_BASE, normalizeMeeting } from "./api";
 import { useQuery, useQueryClient, } from "@tanstack/react-query";
 import EngagementSetupPage from "./features/EngagementSetupPage";
+import StarterPage from "./features/StarterPage";
 /* ============================== APP ROOT ============================== */
 
 export default function App() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const location = useLocation();
+  // react-router doesn't reset scroll position on navigation (that's a
+  // browser-native MPA behavior, not something SPAs get for free) — without
+  // this, navigating from a long, scrolled-down page to a shorter one just
+  // clamps the old scroll offset to the new page's max, which looks like it
+  // "jumps to the bottom" instead of starting at the top.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
   const [page, setPage] = useState("dashboard");
-  const [selectedEngagement, setSelectedEngagement] = useState(null);
+  // Same path mapping Sidebar uses — kept here so any programmatic
+  // "go to page" call (dashboard buttons, KB/meeting/chat citation jumps)
+  // actually changes the URL instead of only updating the (otherwise now
+  // vestigial) `page` state, which stopped driving rendering once routing
+  // moved to react-router's <Routes>.
+  const ROUTE_MAP = {
+    dashboard: "/dashboard", sessions: "/sessions", meetings: "/meetings", kb: "/kb",
+    coverage: "/coverage", sme: "/sme", chat: "/chat", engagementSetup: "/engagement-setup",
+  };
+  const goToPage = (id) => {
+    setPage(id);
+    navigate(ROUTE_MAP[id] || `/${id}`);
+  };
+  // The engagement currently in view — modules, sessions, meetings, and the
+  // dashboard/SME-map pipeline are all scoped to this one engagement.
+  // Persisted so a refresh doesn't drop the user back to the Starter page.
+  const [currentEngagementId, setCurrentEngagementIdState] = useState(() => {
+    const saved = localStorage.getItem("munin.currentEngagementId");
+    return saved ? Number(saved) : null;
+  });
+  const setCurrentEngagementId = (id) => {
+    setCurrentEngagementIdState(id || null);
+    if (id) localStorage.setItem("munin.currentEngagementId", String(id));
+    else localStorage.removeItem("munin.currentEngagementId");
+  };
   const [engagements, setEngagements] = useState([]);
+  const {
+    data: engagementsData,
+    isLoading: engagementsLoading,
+    isError: engagementsErrored,
+    error: engagementsQueryError,
+    refetch: refetchEngagements,
+  } = useQuery({
+    queryKey: ["engagements"],
+    queryFn: api.engagements,
+  });
+  useEffect(() => {
+    if (!engagementsData) return;
+    setEngagements(engagementsData);
+    // If the previously-selected engagement no longer exists (e.g. after a
+    // demo reset), drop back to the Starter page instead of silently
+    // showing an empty/broken workspace.
+    if (currentEngagementId && !engagementsData.some((e) => e.id === currentEngagementId)) {
+      setCurrentEngagementId(null);
+    }
+  }, [engagementsData]);
   const [modules, setModules] = useState([]);
-  const [newEngagementName, setNewEngagementName] = useState("");
+  const {
+    data: modulesData,
+  } = useQuery({
+    queryKey: ["modules", currentEngagementId],
+    queryFn: () => api.modules(currentEngagementId),
+    enabled: !!currentEngagementId,
+  });
+  useEffect(() => {
+    if (!modulesData) return;
+    setModules(modulesData.map((m) => m.name));
+  }, [modulesData]);
   const [sessions, setSessions] = useState([]);
   const {
     data: sessionsData,
     
   } = useQuery({
-    queryKey: ["sessions"],
-    queryFn: api.sessions,
+    queryKey: ["sessions", currentEngagementId],
+    queryFn: () => api.sessions(currentEngagementId),
+    enabled: !!currentEngagementId,
   });
   useEffect(() => {
     if (!sessionsData) return;
@@ -70,8 +138,9 @@ export default function App() {
   const {
     data: dashboardData,
   } = useQuery({
-    queryKey: ["dashboard"],
-    queryFn: api.dashboard,
+    queryKey: ["dashboard", currentEngagementId],
+    queryFn: () => api.dashboard(currentEngagementId),
+    enabled: !!currentEngagementId,
   });
 
   const [sme, setSme] = useState({});
@@ -80,8 +149,9 @@ export default function App() {
     data: smeData,
     
   } = useQuery({
-    queryKey: ["sme-map"],
-    queryFn: api.smeMap,
+    queryKey: ["sme-map", currentEngagementId],
+    queryFn: () => api.smeMap(currentEngagementId),
+    enabled: !!currentEngagementId,
   });
   const [jumpTarget, setJumpTarget] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -92,8 +162,9 @@ export default function App() {
     data: meetingsData,
     
   } = useQuery({
-    queryKey: ["meetings"],
-    queryFn: api.meetings,
+    queryKey: ["meetings", currentEngagementId],
+    queryFn: () => api.meetings(currentEngagementId),
+    enabled: !!currentEngagementId,
   });
   useEffect(() => {
     if (!meetingsData) return;
@@ -138,39 +209,17 @@ export default function App() {
     setGaps(coverageData.gaps);
   }, [coverageData]);
 
-  const fetchAll = async () => {
-    setLoading(true);
-    setLoadError(null);
-    try {
-      const [engagementList, moduleList] = await Promise.all([
-        api.engagements(),
-        api.modules(),
-      ]);
-
-      
-      
-      setEngagements(engagementList);
-      setModules(
-        moduleList.map((m) => m.name)
-      );
-
-      await Promise.all([]);
-    } catch (err) {
-      console.error(err);
-      setLoadError(err.message || "Failed to load data from the backend.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // `engagements` is now sourced from the ["engagements"] query above —
+  // loading/error state mirrors that query directly instead of a separate
+  // imperative fetch, so any invalidateQueries(["engagements"]) call
+  // anywhere in the app (module edits, engagement edits, demo reset, etc.)
+  // keeps this in sync without a manual page refresh.
   useEffect(() => {
-    fetchAll();
-  }, []);
-
-  // Meetings aren't part of fetchAll's critical path — a failure here
-  // shouldn't block the rest of the app from loading, so it's a separate,
-  // best-effort fetch.
-
+    setLoading(engagementsLoading);
+  }, [engagementsLoading]);
+  useEffect(() => {
+    setLoadError(engagementsErrored ? (engagementsQueryError?.message || "Failed to load data from the backend.") : null);
+  }, [engagementsErrored, engagementsQueryError]);
 
   // Best-effort: lets the UI warn about missing GROQ_API_KEY / RECALL_API_KEY
   // / PUBLIC_BASE_URL up front instead of the user discovering it via a
@@ -185,7 +234,7 @@ export default function App() {
   // the celebratory flash banner).
   const handleUploadComplete = async () => {
     try {
-      const res = await api.uploadSession();
+      const res = await api.uploadSession(currentEngagementId);
       if (res.alreadyUploaded) return true;
 
       setSessions((prev) => [...prev, res.session]);
@@ -209,18 +258,18 @@ export default function App() {
   const goToTranscript = (ko) => {
     const segTime = ko.source.split(", ").pop();
     setJumpTarget({ sessionId: ko.sessionId, segTime });
-    setPage("sessions");
+    goToPage("sessions");
   };
 
   const goToMeetingSession = (sessionId) => {
     setJumpTarget({ sessionId, segTime: undefined });
-    setPage("sessions");
+    goToPage("sessions");
   };
 
   const goToChatCitation = (citation) => { 
     if (!citation || !citation.sessionId) return; 
     setJumpTarget({ sessionId: citation.sessionId, segTime: citation.timestamp || undefined }); 
-    setPage("sessions"); 
+    goToPage("sessions"); 
   };
 
   // Called after a real document upload succeeds (see UploadModal / Sessions).
@@ -249,7 +298,9 @@ export default function App() {
     setResetting(true);
     try {
       await api.resetDemo();
-      await fetchAll();
+      // A full reset touches every table, so every cached query (not just
+      // engagements) needs to be treated as stale.
+      await queryClient.invalidateQueries();
     } catch (err) {
       console.error(err);
       alert("Reset failed — is the backend running?");
@@ -279,7 +330,7 @@ export default function App() {
           <div style={{ color: C.red, marginBottom: 14, display: "flex", justifyContent: "center" }}><Icon d={icons.alert} size={26} /></div>
           <div style={{ fontSize: 14.5, marginBottom: 6 }}>Couldn't reach the Munin backend</div>
           <div style={{ fontSize: 12.5, color: C.textFaint, marginBottom: 18 }}>{loadError}<br />Make sure it's running at {API_BASE}.</div>
-          <button onClick={fetchAll} style={btnPrimary}><Icon d={icons.refresh} size={14} /> Retry</button>
+          <button onClick={() => refetchEngagements()} style={btnPrimary}><Icon d={icons.refresh} size={14} /> Retry</button>
         </div>
       </div>
     );
@@ -309,13 +360,36 @@ export default function App() {
   //   );  
   // }
   
+  if (!currentEngagementId) {
+    return (
+      <div style={{ fontFamily: FF.sans, background: C.bg, color: C.text, minHeight: "100vh" }}>
+        <style>{FONT_IMPORT}</style>
+        <StarterPage
+          onSelectEngagement={(engagement) => {
+            setEngagements((prev) => (prev.some((e) => e.id === engagement.id) ? prev : [engagement, ...prev]));
+            setCurrentEngagementId(engagement.id);
+          }}
+        />
+      </div>
+    );
+  }
+
+  const currentEngagement = engagements.find((e) => e.id === currentEngagementId);
+
   return (
     <div style={{ fontFamily: FF.sans, background: C.bg, color: C.text, display: "flex", minHeight: 640, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}` }}>
       <style>{FONT_IMPORT}</style>
-      <Sidebar page={page} setPage={setPage} openGapsCount={openGapsCount} />
+      <Sidebar
+        page={page}
+        setPage={setPage}
+        openGapsCount={openGapsCount}
+        onSwitchEngagement={() => setCurrentEngagementId(null)}
+      />
       <div style={{ flex: 1, minWidth: 0 }}>
         <EngagementHeader
-          engagementName={engagements?.[0]?.name}
+          engagementName={currentEngagement?.name}
+          engagementPhase={currentEngagement?.phase}
+          onSwitchEngagement={() => setCurrentEngagementId(null)}
         />
         {configStatus && !dismissConfigBanner && (!configStatus.groqConfigured || !configStatus.recallConfigured || !configStatus.meetingWebhookConfigured) && (
           <div style={{ margin: "0 32px", marginTop: 18, padding: "10px 14px", background: C.amberSofter, border: "1px solid rgba(217,164,65,0.3)", borderRadius: 8, fontSize: 12, color: C.amber, display: "flex", alignItems: "flex-start", gap: 10 }}>
@@ -341,7 +415,7 @@ export default function App() {
                 stats={stats}
                 readiness={readiness}
                 activity={activity}
-                setPage={setPage}
+                setPage={goToPage}
               />
             }
           />
@@ -351,7 +425,9 @@ export default function App() {
             element={
               <Sessions
                 sessions={sessions}
+                setSessions={setSessions}
                 modules={modules}
+                engagementId={currentEngagementId}
                 onUploadComplete={handleUploadComplete}
                 onRealUpload={handleRealUpload}
                 jumpTarget={jumpTarget}
@@ -366,6 +442,8 @@ export default function App() {
              <Meetings
                 meetings={meetings}
                 setMeetings={setMeetings}
+                engagementId={currentEngagementId}
+                modules={modules}
                 refreshAfterProcessing={() =>
                   queryClient.invalidateQueries({
                     queryKey: ["dashboard"],
@@ -423,7 +501,7 @@ export default function App() {
           />
           <Route
             path="/engagement-setup"
-            element={<EngagementSetupPage />}
+            element={<EngagementSetupPage engagementId={currentEngagementId} />}
           />
         </Routes>
        

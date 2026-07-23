@@ -41,10 +41,17 @@ async function extractText(file) {
   throw new Error(`Unsupported file type "${ext}". Supported: .txt, .md, .pdf, .docx`);
 }
 
-// POST /api/documents/upload  (multipart/form-data, field name: "file")
+// POST /api/documents/upload  (multipart/form-data, field name: "file",
+// plus a plain form field "engagementId" identifying which engagement this
+// session belongs to)
 router.post("/upload", upload.single("file"), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded. Send it as multipart/form-data under the field name 'file'." });
+  }
+
+  const engagementId = req.body?.engagementId ? Number(req.body.engagementId) : null;
+  if (!engagementId) {
+    return res.status(400).json({ error: "engagementId is required." });
   }
 
   const ext = path.extname(req.file.originalname).toLowerCase();
@@ -74,20 +81,20 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 
     let knowledgeObjects;
     try {
-      knowledgeObjects = await extractKnowledgeFromText(trimmed, req.file.originalname);
+      knowledgeObjects = await extractKnowledgeFromText(trimmed, req.file.originalname, engagementId);
     } catch (err) {
       return res.status(502).json({ error: `Groq extraction failed: ${err.message}` });
     }
 
     const sessionId = `doc-${nanoid(8)}`;
     const now = new Date();
-    const primaryModule = knowledgeObjects[0]?.module || guessModule(trimmed, listModules().map((m)=>m.name));
-    ensureModule(primaryModule);
+    const primaryModule = knowledgeObjects[0]?.module || guessModule(trimmed, listModules(engagementId).map((m)=>m.name));
+    ensureModule(primaryModule, engagementId);
     
 
     const insertSession = db.prepare(
-      `INSERT INTO sessions (id, num, module, title, date, duration, status, attendees, source_type)
-       VALUES (@id, @num, @module, @title, @date, @duration, @status, @attendees, @source_type)`
+      `INSERT INTO sessions (id, num, module, title, date, duration, status, attendees, source_type, engagement_id)
+       VALUES (@id, @num, @module, @title, @date, @duration, @status, @attendees, @source_type, @engagement_id)`
     );
 
     const insertSegment = db.prepare(
@@ -95,8 +102,8 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     );
 
     const insertKO = db.prepare(
-      `INSERT INTO knowledge_objects (id, title, type, module, description, confidence, needs_review, source, session_id, segment_timestamp)
-       VALUES (@id, @title, @type, @module, @description, @confidence, @needs_review, @source, @session_id, @segment_timestamp)`
+      `INSERT INTO knowledge_objects (id, title, type, module, description, confidence, needs_review, source, session_id, segment_timestamp, speaker)
+       VALUES (@id, @title, @type, @module, @description, @confidence, @needs_review, @source, @session_id, @segment_timestamp, @speaker)`
     );
     const insertActivity = db.prepare(`INSERT INTO activity (text, created_at) VALUES (@text, @created_at)`);
 
@@ -114,6 +121,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         status: "Complete",
         attendees: JSON.stringify(["Document Upload"]),
         source_type: "document",
+        engagement_id: engagementId,
       });
 
       insertSegment.run({ session_id: sessionId, seq: 0, timestamp: "00:00:00", speaker: "Document", text: trimmed });
@@ -131,6 +139,9 @@ router.post("/upload", upload.single("file"), async (req, res) => {
           source: `${req.file.originalname} (document upload)`,
           session_id: sessionId,
           segment_timestamp: null,
+          // A document has no multiple-speaker dialogue to attribute to, so
+          // any "speaker" the LLM might still return is deliberately ignored.
+          speaker: null,
         });
         savedKOs.push({ id: koId, ...k, needsReview: k.confidence < 0.6, source: `${req.file.originalname} (document upload)` });
       }

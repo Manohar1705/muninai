@@ -8,7 +8,7 @@ import {
   icons,
 } from "./common";
 /* ============================== SIDEBAR ============================== */
-function Sidebar({ page, setPage, openGapsCount}) {
+function Sidebar({ page, setPage, openGapsCount, onSwitchEngagement }) {
     const navigate = useNavigate();
     const location = useLocation();
   const items = [
@@ -63,6 +63,19 @@ function Sidebar({ page, setPage, openGapsCount}) {
             </button>
           );
         })}
+      </div>
+      <div style={{ marginTop: "auto", paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+        <button
+          onClick={onSwitchEngagement}
+          title="Return to the engagement selector"
+          style={{
+            display: "flex", alignItems: "center", gap: 9, padding: "8px 10px", width: "100%", textAlign: "left",
+            color: C.textFaint, fontSize: 12.5, background: "transparent", border: "none", cursor: "pointer", fontFamily: FF.sans,
+          }}
+        >
+          <Icon d={icons.arrowRight} size={14} style={{ transform: "rotate(180deg)" }} />
+          <span>Switch engagement</span>
+        </button>
       </div>
       {/* <div style={{ marginTop: "auto", paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
         <button

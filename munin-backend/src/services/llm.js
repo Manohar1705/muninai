@@ -40,20 +40,20 @@ function sanitizeModule(raw) {
   if (/^(unclassified|n\/a|none|unknown|general)$/i.test(trimmed)) return null;
   return trimmed.slice(0,60);
 }
-function buildExtractionPrompt(text, sourceLabel) {
-  const knownModules = listModules();
+function buildExtractionPrompt(text, sourceLabel, engagementId) {
+  const knownModules = listModules(engagementId);
   return extractionPromptTemplate
     .replace("{{SOURCE_LABEL}}", sourceLabel)
     .replace("{{TEXT}}", text.slice(0, 12000))
-    .replace("{{VALID_MODULES}}", knownModules.length ? knownModules.join(", ") : "(none yet)");
+    .replace("{{VALID_MODULES}}", knownModules.length ? knownModules.map((m) => m.name).join(", ") : "(none yet)");
 }
 
-async function extractKnowledgeFromText(text, sourceLabel) {
+async function extractKnowledgeFromText(text, sourceLabel, engagementId) {
   if (!isGroqConfigured()) {
     throw new Error("GROQ_API_KEY is not set — cannot run extraction.");
   }
 
-  const prompt = buildExtractionPrompt(text, sourceLabel);
+  const prompt = buildExtractionPrompt(text, sourceLabel, engagementId);
   const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
   return traceLlmCall({ name: "extract-knowledge", input: prompt, metadata: { model, sourceLabel } }, async () => {
@@ -106,8 +106,13 @@ async function extractKnowledgeFromText(text, sourceLabel) {
         description: o.description.slice(0, 2000),
         type: typeof o.type === "string" ? o.type : "Other",
         // module: VALID_MODULES.includes(o.module) ? o.module : guessModule(`${o.title} ${o.description}`),
-        module: sanitizeModule(o.module) || guessModule(`${o.title} ${o.description}`, listModules().map((m) => m.name)),
+        module: sanitizeModule(o.module) || guessModule(`${o.title} ${o.description}`, listModules(engagementId).map((m) => m.name)),
         confidence: typeof o.confidence === "number" ? Math.max(0, Math.min(1, o.confidence)) : 0.5,
+        // Raw, unverified — the LLM can hallucinate a name. Callers that
+        // actually persist this (meetingProcessor.js) must cross-check it
+        // against the real speakers present in that transcript before
+        // trusting it for attribution.
+        speaker: typeof o.speaker === "string" && o.speaker.trim() ? o.speaker.trim().slice(0, 100) : null,
       }));
   });
 }

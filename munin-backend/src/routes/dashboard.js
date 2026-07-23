@@ -4,55 +4,35 @@ const { listModules } = require("../services/modules");
 
 const router = express.Router();
 
+// GET /api/dashboard?engagementId=1 — the quantitative coverage pipeline for
+// one engagement: modules are the source of truth, so every number here is
+// derived from listModules(engagementId) (planned vs. actually covered
+// sessions per module) rather than a separate, independently-tracked score.
 router.get("/", (req, res) => {
-  const modulesCovered = db.prepare(`
-    SELECT COUNT(DISTINCT module) AS c
-    FROM sessions
-    WHERE source_type IN ('kt_session', 'meeting')
-  `).get().c;
+  const engagementId = req.query.engagementId ? Number(req.query.engagementId) : undefined;
+  const modules = listModules(engagementId);
 
-  const plannedSessions = db.prepare(`
-    SELECT COALESCE(SUM(planned_sessions), 0) AS c
-    FROM modules
-  `).get().c;
+  const modulesCovered = modules.filter((m) => (m.completed_sessions || 0) > 0).length;
+  const plannedSessions = modules.reduce((sum, m) => sum + (m.planned_sessions || 0), 0);
+  const completedSessions = modules.reduce((sum, m) => sum + (m.completed_sessions || 0), 0);
 
-  const completedSessions = db.prepare(`
-    SELECT COUNT(*) AS c
-    FROM sessions
-    WHERE source_type IN ('kt_session', 'meeting')
-  `).get().c;
+  // Per-module readiness carries the raw session counts alongside the
+  // percentage — a bare "33%" has no functional meaning on its own, but
+  // "2 / 6 sessions" does.
   const readiness = {};
-
-  const modules = listModules();
-
   for (const module of modules) {
     const completed = module.completed_sessions || 0;
-
     const planned = module.planned_sessions || 0;
-
-    const score =
-      planned > 0
-        ? Math.min(
-            100,
-            Math.round(
-              (completed / planned) * 100
-            )
-          )
-        : 0;
-
-    readiness[module.name] = score;
+    readiness[module.name] = {
+      pct: planned > 0 ? Math.min(100, Math.round((completed / planned) * 100)) : 0,
+      completed,
+      planned,
+    };
   }
 
-  const overall =
-    plannedSessions > 0
-      ? Math.min(
-          100,
-          Math.round(
-            (completedSessions / plannedSessions) * 100
-          )
-        )
-      : 0;
-
+  const overall = plannedSessions > 0
+    ? Math.min(100, Math.round((completedSessions / plannedSessions) * 100))
+    : 0;
 
   const activity = db
     .prepare(`SELECT text, created_at AS createdAt FROM activity ORDER BY id DESC LIMIT 12`)

@@ -1,7 +1,7 @@
 const express = require("express");
 const { db } = require("../db");
 const { SESSION_9, KNOWLEDGE_OBJECTS_SEED } = require("../data/seedData");
-const { ensureModule } = require("../services/modules");
+const { ensureModule, listModules } = require("../services/modules");
 const router = express.Router();
 
 function serializeSession(row) {
@@ -14,12 +14,16 @@ function serializeSession(row) {
     duration: row.duration,
     status: row.status,
     attendees: JSON.parse(row.attendees),
+    engagementId: row.engagement_id,
   };
 }
 
-// GET /api/sessions — lightweight list (no transcript payload)
+// GET /api/sessions?engagementId=1 — lightweight list (no transcript payload)
 router.get("/", (req, res) => {
-  const rows = db.prepare(`SELECT * FROM sessions ORDER BY num ASC`).all();
+  const engagementId = req.query.engagementId ? Number(req.query.engagementId) : null;
+  const rows = engagementId
+    ? db.prepare(`SELECT * FROM sessions WHERE engagement_id = ? ORDER BY num ASC`).all(engagementId)
+    : db.prepare(`SELECT * FROM sessions ORDER BY num ASC`).all();
   res.json(rows.map(serializeSession));
 });
 
@@ -53,8 +57,12 @@ router.post("/upload", (req, res) => {
     return res.json({ alreadyUploaded: true, message: "Session 9 has already been added." });
   }
 
+  const requestedEngagementId = req.body?.engagementId ? Number(req.body.engagementId) : null;
+  const engagementId = requestedEngagementId || db.prepare(`SELECT id FROM engagements ORDER BY id ASC LIMIT 1`).get()?.id || null;
+  ensureModule(SESSION_9.module, engagementId);
+
   const insertSession = db.prepare(
-    `INSERT INTO sessions (id, num, module, title, date, duration, status, attendees) VALUES (@id, @num, @module, @title, @date, @duration, @status, @attendees)`
+    `INSERT INTO sessions (id, num, module, title, date, duration, status, attendees, engagement_id) VALUES (@id, @num, @module, @title, @date, @duration, @status, @attendees, @engagement_id)`
   );
   const insertSegment = db.prepare(
     `INSERT INTO transcript_segments (session_id, seq, timestamp, speaker, text) VALUES (@session_id, @seq, @timestamp, @speaker, @text)`
@@ -72,6 +80,7 @@ router.post("/upload", (req, res) => {
       id: SESSION_9.id, num: SESSION_9.num, module: SESSION_9.module, title: SESSION_9.title,
       date: SESSION_9.date, duration: SESSION_9.duration, status: SESSION_9.status,
       attendees: JSON.stringify(SESSION_9.attendees),
+      engagement_id: engagementId,
     });
     SESSION_9.transcript.forEach((seg, i) => {
       insertSegment.run({ session_id: SESSION_9.id, seq: i, timestamp: seg.t, speaker: seg.s, text: seg.x });
@@ -123,21 +132,41 @@ router.post("/upload", (req, res) => {
   });
 });
 
+// PATCH /api/sessions/:id/module — reclassifies a session. Restricted to
+// the session's own engagement's defined module list (or "Unclassified") —
+// same rule as meetings' module PATCH: Munin only ever puts a KT session
+// into one of the modules an engagement has actually defined, never an
+// arbitrary free-typed name.
 router.patch("/:id/module", (req, res) => {
   const { module } = req.body;
   const currentSession = db
-    .prepare(`SELECT module FROM sessions WHERE id = ?`)
+    .prepare(`SELECT module, engagement_id FROM sessions WHERE id = ?`)
     .get(req.params.id);
 
+  if (!currentSession) {
+    return res.status(404).json({ error: "Session not found" });
+  }
+
+  const trimmedModule = String(module || "").trim();
+  if (!trimmedModule) {
+    return res.status(400).json({ error: "module is required" });
+  }
+
+  const allowedNames = listModules(currentSession.engagement_id).map((m) => m.name);
+  if (trimmedModule !== "Unclassified" && !allowedNames.includes(trimmedModule)) {
+    return res.status(400).json({
+      error: `"${trimmedModule}" is not a defined module for this engagement. Add it under Engagement Setup first, or choose an existing module.`,
+    });
+  }
+
   const oldModule = currentSession?.module;
-  ensureModule(module);
   const result = db
     .prepare(`
       UPDATE sessions
       SET module = ?
       WHERE id = ?
     `)
-    .run(module, req.params.id);
+    .run(trimmedModule, req.params.id);
 
   if (result.changes === 0) {
     return res.status(404).json({ error: "Session not found" });
@@ -147,15 +176,15 @@ router.patch("/:id/module", (req, res) => {
     UPDATE knowledge_objects
     SET module = ?
     WHERE session_id = ?
-  `).run(module, req.params.id);
-  if (oldModule && oldModule !== module) {
+  `).run(trimmedModule, req.params.id);
+  if (oldModule && oldModule !== trimmedModule) {
     const oldReadiness = db
       .prepare(`SELECT score FROM readiness WHERE module = ?`)
       .get(oldModule);
 
     const newReadiness = db
       .prepare(`SELECT score FROM readiness WHERE module = ?`)
-      .get(module);
+      .get(trimmedModule);
 
     if (oldReadiness) {
       db.prepare(`
@@ -164,7 +193,7 @@ router.patch("/:id/module", (req, res) => {
         WHERE module = ?
       `).run(
         Math.max(oldReadiness.score, newReadiness?.score || 0),
-        module
+        trimmedModule
       );
 
      const remainingUsage =

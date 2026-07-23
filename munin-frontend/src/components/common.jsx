@@ -61,6 +61,7 @@ const icons = {
   archive: <><rect x="2" y="4" width="20" height="5" rx="1"/><path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/></>,
   panelLeft: <><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></>,
   trash: <><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></>,
+  plus: <><path d="M12 5v14"/><path d="M5 12h14"/></>,
 };
 
 /* ============================== SHARED UI ============================== */
@@ -106,6 +107,26 @@ function Section({ title, action, children, style }) {
 function Card({ children, style, ...rest }) {
   return <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, ...style }} {...rest}>{children}</div>;
 }
+// Quantitative coverage bar (e.g. "sessions covered / sessions planned").
+// `value` is a 0-100 percentage; colors shift from amber toward green as it
+// approaches completion so the same component reads well at 5% or 95%.
+function ProgressBar({ value, height = 8, label, sub }) {
+  const pct = Math.max(0, Math.min(100, Math.round(value || 0)));
+  const color = pct >= 100 ? C.green : C.amber;
+  return (
+    <div>
+      {(label || sub) && (
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+          {label && <span style={{ fontSize: 12.5, color: C.textMuted }}>{label}</span>}
+          {sub !== undefined && <span style={{ fontSize: 12.5, color: C.text, fontFamily: FF.mono, fontWeight: 500 }}>{sub ?? `${pct}%`}</span>}
+        </div>
+      )}
+      <div style={{ height, background: "#1E2027", borderRadius: height, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: color, transition: "width 0.3s ease" }} />
+      </div>
+    </div>
+  );
+}
 const btnPrimary = {
   display: "inline-flex", alignItems: "center", gap: 7, background: C.amber, color: "#1A1408",
   border: "none", borderRadius: 7, padding: "9px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: FF.sans,
@@ -126,6 +147,7 @@ export {
   Pill,
   TypeBadge,
   ConfidenceBadge,
+  ProgressBar,
   btnPrimary,
   btnGhost,
 };

@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS engagements (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   phase TEXT NOT NULL,
+  details TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -42,7 +43,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   date TEXT NOT NULL,
   duration TEXT NOT NULL,
   status TEXT NOT NULL,
-  attendees TEXT NOT NULL -- JSON array of names
+  attendees TEXT NOT NULL, -- JSON array of names
+  engagement_id INTEGER REFERENCES engagements(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS transcript_segments (
@@ -64,7 +66,10 @@ CREATE TABLE IF NOT EXISTS knowledge_objects (
   needs_review INTEGER NOT NULL,
   source TEXT NOT NULL,          -- human readable "Session title, HH:MM:SS"
   session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,
-  segment_timestamp TEXT
+  segment_timestamp TEXT,
+  speaker TEXT                   -- who this fact is attributed to (meetings
+                                 -- only — validated against real speakers seen
+                                 -- in that meeting's transcript at insert time)
 );
 
 CREATE TABLE IF NOT EXISTS kt_topics (
@@ -120,9 +125,16 @@ CREATE TABLE IF NOT EXISTS conversations (
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Modules are namespaced per engagement (two engagements may each define
+-- a module called "Payments Core" without colliding) so the uniqueness
+-- constraint is on (engagement_id, name), not name alone.
 CREATE TABLE IF NOT EXISTS modules(
-  name TEXT PRIMARY KEY,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  engagement_id INTEGER REFERENCES engagements(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  planned_sessions INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE(engagement_id, name)
 );
 
 CREATE TABLE IF NOT EXISTS app_state (
@@ -139,6 +151,7 @@ CREATE TABLE IF NOT EXISTS meetings (
   status TEXT NOT NULL,         -- joining | in_call | call_ended | done | error
   session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL, -- linked once transcript is processed (Step 5)
   error TEXT,
+  engagement_id INTEGER REFERENCES engagements(id) ON DELETE CASCADE,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -166,14 +179,14 @@ function tableIsEmpty(table) {
 
 function seedIfEmpty() {
   const insertSession = db.prepare(
-    `INSERT INTO sessions (id, num, module, title, date, duration, status, attendees) VALUES (@id, @num, @module, @title, @date, @duration, @status, @attendees)`
+    `INSERT INTO sessions (id, num, module, title, date, duration, status, attendees, engagement_id) VALUES (@id, @num, @module, @title, @date, @duration, @status, @attendees, @engagement_id)`
   );
   const insertSegment = db.prepare(
     `INSERT INTO transcript_segments (session_id, seq, timestamp, speaker, text) VALUES (@session_id, @seq, @timestamp, @speaker, @text)`
   );
   const insertKO = db.prepare(
-    `INSERT INTO knowledge_objects (id, title, type, module, description, confidence, needs_review, source, session_id, segment_timestamp)
-     VALUES (@id, @title, @type, @module, @description, @confidence, @needs_review, @source, @session_id, @segment_timestamp)`
+    `INSERT INTO knowledge_objects (id, title, type, module, description, confidence, needs_review, source, session_id, segment_timestamp, speaker)
+     VALUES (@id, @title, @type, @module, @description, @confidence, @needs_review, @source, @session_id, @segment_timestamp, @speaker)`
   );
   const insertTopic = db.prepare(
     `INSERT INTO kt_topics (module, topic, depth) VALUES (@module, @topic, @depth)`
@@ -191,10 +204,13 @@ function seedIfEmpty() {
     `INSERT INTO activity (text, created_at) VALUES (@text, @created_at)`
   );
   const insertChat = db.prepare(
-    `INSERT INTO chat_messages (role, text, citation, is_gap, conversation_id) VALUES (@role, @text, @citation, @is_gap, @conversation_id)`
+    `INSERT INTO chat_messages (role, text, citation, citation_session_id, citation_timestamp, is_gap, conversation_id) VALUES (@role, @text, @citation, @citation_session_id, @citation_timestamp, @is_gap, @conversation_id)`
   );
   const insertConversation = db.prepare(
     `INSERT INTO conversations (id, title) VALUES (@id, @title)`
+  );
+  const insertSme = db.prepare(
+    `INSERT INTO smes (name, role) VALUES (@name, @role)`
   );
 
   // Helper: find which session a KO's source belongs to, and its timestamp
@@ -207,13 +223,18 @@ function seedIfEmpty() {
   const seedTx = db.transaction(() => {
   if (tableIsEmpty("engagements")) {
     db.prepare(`
-      INSERT INTO engagements (name, phase)
-      VALUES (?, ?)
+      INSERT INTO engagements (name, phase, details)
+      VALUES (?, ?, ?)
     `).run(
       ENGAGEMENT.name,
-      ENGAGEMENT.phase
+      ENGAGEMENT.phase,
+      ENGAGEMENT.details || ""
     );
   }
+
+    // Everything seeded below (sessions, modules) belongs to this one demo
+    // engagement — new engagements created later start with none of it.
+    const seedEngagementId = db.prepare(`SELECT id FROM engagements ORDER BY id ASC LIMIT 1`).get()?.id || null;
 
     if (tableIsEmpty("smes")) {
       for (const [name, role] of Object.entries(SME_ROLES)) {
@@ -227,6 +248,7 @@ function seedIfEmpty() {
           id: s.id, num: s.num, module: s.module, title: s.title,
           date: s.date, duration: s.duration, status: s.status,
           attendees: JSON.stringify(s.attendees),
+          engagement_id: seedEngagementId,
         });
         s.transcript.forEach((seg, i) => {
           insertSegment.run({ session_id: s.id, seq: i, timestamp: seg.t, speaker: seg.s, text: seg.x });
@@ -242,7 +264,7 @@ function seedIfEmpty() {
           id: k.id, title: k.title, type: k.type, module: k.module,
           description: k.description, confidence: k.confidence,
           needs_review: k.needsReview ? 1 : 0, source: k.source,
-          session_id: sessionId, segment_timestamp: ts,
+          session_id: sessionId, segment_timestamp: ts, speaker: null,
         });
       }
     }
@@ -273,9 +295,14 @@ function seedIfEmpty() {
       }
     }
     if(tableIsEmpty("modules")) {
-      const insertModule = db.prepare(`INSERT OR IGNORE INTO modules (name) VALUES (?)`);
+      // Seed planned_sessions from the actual seeded session count per
+      // module (plus a small realistic backlog) so the demo engagement
+      // starts in a believable "in progress" state instead of violating
+      // the planned >= completed invariant with a planned count of 0.
+      const insertModule = db.prepare(`INSERT OR IGNORE INTO modules (engagement_id, name, planned_sessions) VALUES (?, ?, ?)`);
       for(const [module] of Object.entries(READINESS_INITIAL)) {
-        insertModule.run(module);
+        const completedCount = SESSIONS_SEED.filter((s) => s.module === module).length;
+        insertModule.run(seedEngagementId, module, completedCount + 2);
       }
     }
 
@@ -289,7 +316,16 @@ function seedIfEmpty() {
  
     if (tableIsEmpty("chat_messages")) {
       for (const m of CHAT_SEED) {
-        insertChat.run({ role: m.role, text: m.text, citation: m.citation, is_gap: m.isGap ? 1 : 0, conversation_id: "conv-demo" });
+        // citation_session_id/timestamp are what "View source" in Ask Munin
+        // actually navigates on — without resolving them here too, the
+        // seeded demo conversation reproduces the same broken-link bug the
+        // migration backfill above fixes for pre-existing databases.
+        const resolved = m.citation ? resolveKoSession(m.citation) : { sessionId: null, ts: null };
+        insertChat.run({
+          role: m.role, text: m.text, citation: m.citation,
+          citation_session_id: resolved.sessionId, citation_timestamp: resolved.ts,
+          is_gap: m.isGap ? 1 : 0, conversation_id: "conv-demo",
+        });
       }
     }
 
@@ -359,6 +395,38 @@ function migrateSchema() {
   if (!chatCols.includes("citation_timestamp")) {
     db.exec(`ALTER TABLE chat_messages ADD COLUMN citation_timestamp TEXT`);
   }
+
+  const koCols = db.prepare(`PRAGMA table_info(knowledge_objects)`).all().map((c) => c.name);
+  if (!koCols.includes("speaker")) {
+    db.exec(`ALTER TABLE knowledge_objects ADD COLUMN speaker TEXT`);
+  }
+
+  // Backfill: messages saved before the two columns above existed (e.g. the
+  // seeded demo conversation) have a human-readable `citation` string like
+  // "KT Session 2 — ..., 00:04:09" but no citation_session_id/timestamp —
+  // which silently breaks Ask Munin's "View source" button (it requires
+  // citation.sessionId to navigate). Resolved the same way KO sources are
+  // resolved elsewhere: split on the last ", " into "<session title>" and
+  // "<timestamp>", then look up the session by title. Only touches rows
+  // that are actually broken, so real conversations are never overwritten.
+  const brokenCitations = db.prepare(`
+    SELECT id, citation FROM chat_messages
+    WHERE citation IS NOT NULL AND citation_session_id IS NULL
+  `).all();
+  if (brokenCitations.length) {
+    const findSessionByTitle = db.prepare(`SELECT id FROM sessions WHERE title = ?`);
+    const fixCitation = db.prepare(`UPDATE chat_messages SET citation_session_id = ?, citation_timestamp = ? WHERE id = ?`);
+    for (const row of brokenCitations) {
+      const lastComma = row.citation.lastIndexOf(", ");
+      if (lastComma === -1) continue;
+      const titlePart = row.citation.slice(0, lastComma);
+      const tsPart = row.citation.slice(lastComma + 2);
+      const session = findSessionByTitle.get(titlePart);
+      if (session) {
+        fixCitation.run(session.id, tsPart, row.id);
+      }
+    }
+  }
  
   const conversationCols = db.prepare(`PRAGMA table_info(conversations)`).all().map((c) => c.name);
   if (!conversationCols.includes("pinned")) {
@@ -384,6 +452,63 @@ function migrateSchema() {
       ALTER TABLE modules
       ADD COLUMN planned_sessions INTEGER NOT NULL DEFAULT 0
     `);
+  }
+
+  const engagementCols = db.prepare(`PRAGMA table_info(engagements)`).all().map((c) => c.name);
+  if (!engagementCols.includes("details")) {
+    db.exec(`ALTER TABLE engagements ADD COLUMN details TEXT NOT NULL DEFAULT ''`);
+  }
+
+  // Everything below scopes Modules & Sessions (and the Meetings that
+  // create them) to a single engagement, so a Starter page can list
+  // multiple engagements each with their own module list and session
+  // counts instead of one shared global pool.
+  //
+  // This database only ever holds demo/seed data (see data/seedData.js),
+  // never real customer records, so instead of writing fragile per-row
+  // UPDATE ... WHERE x IS NULL backfills for legacy databases created
+  // before engagement-scoping existed, a legacy database is simply wiped
+  // and regenerated through the exact same insertion path a brand-new
+  // install uses (resetDemoData -> seedIfEmpty). That guarantees the
+  // reseeded data is fully self-consistent (correct engagement_id
+  // everywhere, planned_sessions >= completed_sessions, etc.) instead of
+  // relying on backfill passes that can drift from what a real insert
+  // would produce.
+  const sessionCols2 = db.prepare(`PRAGMA table_info(sessions)`).all().map((c) => c.name);
+  const moduleColsForEngagement = db.prepare(`PRAGMA table_info(modules)`).all().map((c) => c.name);
+  const isLegacyPreEngagementSchema =
+    !sessionCols2.includes("engagement_id") || !moduleColsForEngagement.includes("engagement_id");
+
+  if (!sessionCols2.includes("engagement_id")) {
+    db.exec(`ALTER TABLE sessions ADD COLUMN engagement_id INTEGER REFERENCES engagements(id) ON DELETE CASCADE`);
+  }
+
+  const meetingCols5 = db.prepare(`PRAGMA table_info(meetings)`).all().map((c) => c.name);
+  if (!meetingCols5.includes("engagement_id")) {
+    db.exec(`ALTER TABLE meetings ADD COLUMN engagement_id INTEGER REFERENCES engagements(id) ON DELETE CASCADE`);
+  }
+
+  if (!moduleColsForEngagement.includes("engagement_id")) {
+    // Module names used to be globally unique; now they're namespaced per
+    // engagement, so the table is rebuilt with a surrogate key and a
+    // (engagement_id, name) uniqueness constraint instead of `name` alone.
+    // Data isn't copied over here because isLegacyPreEngagementSchema
+    // triggers a full reseed right below anyway.
+    db.exec(`DROP TABLE modules`);
+    db.exec(`
+      CREATE TABLE modules (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        engagement_id INTEGER REFERENCES engagements(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        planned_sessions INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        UNIQUE(engagement_id, name)
+      );
+    `);
+  }
+
+  if (isLegacyPreEngagementSchema) {
+    resetDemoData();
   }
 }
 function initDb() {

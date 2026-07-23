@@ -64,8 +64,8 @@ function resolveSessionTitle(meeting) {
 const getMeetingById = db.prepare(`SELECT * FROM meetings WHERE id = ?`);
 const insertActivity = db.prepare(`INSERT INTO activity (text, created_at) VALUES (@text, @created_at)`);
 const insertSession = db.prepare(
-  `INSERT INTO sessions (id, num, module, title, date, duration, status, attendees, source_type)
-   VALUES (@id, @num, @module, @title, @date, @duration, @status, @attendees, @source_type)`
+  `INSERT INTO sessions (id, num, module, title, date, duration, status, attendees, source_type, engagement_id)
+   VALUES (@id, @num, @module, @title, @date, @duration, @status, @attendees, @source_type, @engagement_id)`
 );
 const setSessionComplete = db.prepare(`UPDATE sessions SET status = 'Complete' WHERE id = ?`);
 const setSessionAttendees = db.prepare(`UPDATE sessions SET attendees = ? WHERE id = ?`);
@@ -73,8 +73,8 @@ const insertSegment = db.prepare(
   `INSERT INTO transcript_segments (session_id, seq, timestamp, speaker, text) VALUES (@session_id, @seq, @timestamp, @speaker, @text)`
 );
 const insertKO = db.prepare(
-  `INSERT INTO knowledge_objects (id, title, type, module, description, confidence, needs_review, source, session_id, segment_timestamp)
-   VALUES (@id, @title, @type, @module, @description, @confidence, @needs_review, @source, @session_id, @segment_timestamp)`
+  `INSERT INTO knowledge_objects (id, title, type, module, description, confidence, needs_review, source, session_id, segment_timestamp, speaker)
+   VALUES (@id, @title, @type, @module, @description, @confidence, @needs_review, @source, @session_id, @segment_timestamp, @speaker)`
 );
 const nextNum = db.prepare(`SELECT COALESCE(MAX(num), 0) + 1 AS n FROM sessions`);
 const nextSegSeq = db.prepare(`SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM transcript_segments WHERE session_id = ?`);
@@ -139,15 +139,22 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
   const transcriptText = newChunks.map((c) => `${c.speaker}: ${c.text}`).join("\n");
   // Let extraction errors propagate — the caller decides how to surface
   // them (see routes/meetings.js), same as the original design.
-  const knowledgeObjects = await extractKnowledgeFromText(transcriptText, meeting.bot_name);
+  const knowledgeObjects = await extractKnowledgeFromText(transcriptText, meeting.bot_name, meeting.engagement_id);
 
   const now = new Date();
   const isFirstPass = !meeting.session_id;
   const sessionId = meeting.session_id || `mtg-sess-${nanoid(8)}`;
   const sourceLabel = `${meeting.bot_name} (live meeting)`;
-  const meetingTopic =
-    meeting.meeting_title?.trim() ||
-    guessModule(transcriptText, listModules().map((m) => m.name));
+  // Classify the meeting into one of THIS engagement's defined modules only
+  // (never the free-text meeting title, which is just a display name the
+  // user typed at join time). Once a real classification has been made,
+  // keep it stable across later incremental passes rather than re-guessing
+  // from whatever the latest chunk happens to contain — it only keeps
+  // trying while the meeting is still sitting in "Unclassified".
+  let meetingTopic = meeting.module;
+  if (!meetingTopic || meetingTopic === "Unclassified") {
+    meetingTopic = guessModule(transcriptText, listModules(meeting.engagement_id).map((m) => m.name));
+  }
   db.prepare(`
     UPDATE meetings
     SET module = ?
@@ -173,6 +180,7 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
         status: finalize ? "Complete" : "In Progress",
         attendees: JSON.stringify([]),
         source_type: "meeting",
+        engagement_id: meeting.engagement_id,
       });
     } else if (finalize) {
       setSessionComplete.run(sessionId);
@@ -190,6 +198,18 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
       seq += 1;
     }
 
+    // Never trust the LLM's speaker claim blindly — only accept it if it
+    // exactly matches (case-insensitively) someone who actually has a line
+    // in this meeting's transcript. Anything else (a hallucinated or
+    // paraphrased name) is dropped rather than stored as a false attribution.
+    const knownSpeakers = new Map(
+      distinctSpeakers.all(meeting.bot_id).map((r) => [String(r.speaker || "").trim().toLowerCase(), r.speaker])
+    );
+    const resolveSpeaker = (claimed) => {
+      if (!claimed) return null;
+      return knownSpeakers.get(claimed.trim().toLowerCase()) || null;
+    };
+
     for (const k of knowledgeObjects) {
       const koId = `ko-${nanoid(8)}`;
       insertKO.run({
@@ -203,6 +223,7 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
         source: sourceLabel,
         session_id: sessionId,
         segment_timestamp: null,
+        speaker: resolveSpeaker(k.speaker),
       });
       savedKOs.push({ id: koId, ...k, module: meetingTopic, needsReview: k.confidence < 0.6, source: sourceLabel });
     }

@@ -39,6 +39,11 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     return res.status(400).json({ error: "No file uploaded. Send it as multipart/form-data under the field name 'file'." });
   }
 
+  const engagementId = req.body?.engagementId ? Number(req.body.engagementId) : null;
+  if (!engagementId) {
+    return res.status(400).json({ error: "engagementId is required." });
+  }
+
   const ext = path.extname(req.file.originalname).toLowerCase();
   if (!SUPPORTED_EXTENSIONS.has(ext)) {
     return res.status(400).json({
@@ -66,7 +71,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 
   let knowledgeObjects;
   try {
-    knowledgeObjects = await extractKnowledgeFromText(trimmed, req.file.originalname);
+    knowledgeObjects = await extractKnowledgeFromText(trimmed, req.file.originalname, engagementId);
   } catch (err) {
     // The transcript itself is still valuable even if extraction failed —
     // hand it back so the pipeline isn't a dead end, same pattern as
@@ -78,24 +83,24 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     const sessionId = `rec-${nanoid(8)}`;
     const now = new Date();
 
-    const primaryModule = knowledgeObjects[0]?.module || guessModule(trimmed, listModules().map((m)=>m.name));
+    const primaryModule = knowledgeObjects[0]?.module || guessModule(trimmed, listModules(engagementId).map((m)=>m.name));
 
-    ensureModule(primaryModule);
+    ensureModule(primaryModule, engagementId);
     for (const k of knowledgeObjects) {
-      ensureModule(k.module);
+      ensureModule(k.module, engagementId);
     }
     const sourceLabel = `${req.file.originalname} (recording upload)`;
 
     const insertSession = db.prepare(
-      `INSERT INTO sessions (id, num, module, title, date, duration, status, attendees, source_type)
-       VALUES (@id, @num, @module, @title, @date, @duration, @status, @attendees, @source_type)`
+      `INSERT INTO sessions (id, num, module, title, date, duration, status, attendees, source_type, engagement_id)
+       VALUES (@id, @num, @module, @title, @date, @duration, @status, @attendees, @source_type, @engagement_id)`
     );
     const insertSegment = db.prepare(
       `INSERT INTO transcript_segments (session_id, seq, timestamp, speaker, text) VALUES (@session_id, @seq, @timestamp, @speaker, @text)`
     );
     const insertKO = db.prepare(
-      `INSERT INTO knowledge_objects (id, title, type, module, description, confidence, needs_review, source, session_id, segment_timestamp)
-       VALUES (@id, @title, @type, @module, @description, @confidence, @needs_review, @source, @session_id, @segment_timestamp)`
+      `INSERT INTO knowledge_objects (id, title, type, module, description, confidence, needs_review, source, session_id, segment_timestamp, speaker)
+       VALUES (@id, @title, @type, @module, @description, @confidence, @needs_review, @source, @session_id, @segment_timestamp, @speaker)`
     );
     const insertActivity = db.prepare(`INSERT INTO activity (text, created_at) VALUES (@text, @created_at)`);
     const nextNumRow = db.prepare(`SELECT COALESCE(MAX(num), 0) + 1 AS n FROM sessions`).get();
@@ -112,6 +117,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         status: "Complete",
         attendees: JSON.stringify(["Recording Upload"]),
         source_type: "recording",
+        engagement_id: engagementId,
       });
 
       // Groq's transcription API returns one continuous transcript, not
@@ -133,6 +139,9 @@ router.post("/upload", upload.single("file"), async (req, res) => {
           source: sourceLabel,
           session_id: sessionId,
           segment_timestamp: "00:00:00",
+          // The transcription is one blended "Recording" voice, not real
+          // per-person turns, so there's no individual to attribute to.
+          speaker: null,
         });
         savedKOs.push({ id: koId, ...k, needsReview: k.confidence < 0.6, source: sourceLabel });
       }

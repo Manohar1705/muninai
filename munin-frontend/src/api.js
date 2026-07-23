@@ -66,36 +66,51 @@ function normalizeMeeting(m) {
 }
 
 const api = {
-  dashboard: () => apiRequest("/dashboard"),
-  
-  engagements: () => apiRequest("/engagements"),
-  modules: () => apiRequest("/modules"),
+  dashboard: (engagementId) => apiRequest(`/dashboard?engagementId=${encodeURIComponent(engagementId ?? "")}`),
 
-  createEngagement: (name, phase) =>
+  engagements: () => apiRequest("/engagements"),
+  modules: (engagementId) => apiRequest(`/modules?engagementId=${encodeURIComponent(engagementId ?? "")}`),
+
+  createEngagement: (name, phase, details) =>
     apiRequest("/engagements", {
       method: "POST",
-      body: JSON.stringify({ name, phase }),
+      body: JSON.stringify({ name, phase, details }),
     }),
-  updateEngagement: (id, name) =>
+  updateEngagement: (id, name, details) =>
     apiRequest(`/engagements/${id}`, {
       method: "PATCH",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, details }),
     }),
-  createModule: (name) =>
+  deleteEngagement: (id) =>
+    apiRequest(`/engagements/${id}`, { method: "DELETE" }),
+  createModule: (name, engagementId) =>
     apiRequest("/modules", {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, engagementId }),
     }),
 
-  updateModulePlan: (name, plannedSessions) =>
+  updateModulePlan: (name, plannedSessions, engagementId) =>
     apiRequest(`/modules/${encodeURIComponent(name)}`, {
       method: "PATCH",
       body: JSON.stringify({
         plannedSessions,
+        engagementId,
       }),
     }),
+  renameModule: (name, newName, engagementId) =>
+    apiRequest(`/modules/${encodeURIComponent(name)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        newName,
+        engagementId,
+      }),
+    }),
+  deleteModule: (name, engagementId) =>
+    apiRequest(`/modules/${encodeURIComponent(name)}?engagementId=${encodeURIComponent(engagementId ?? "")}`, {
+      method: "DELETE",
+    }),
 
-  sessions: () => apiRequest("/sessions"),
+  sessions: (engagementId) => apiRequest(`/sessions?engagementId=${encodeURIComponent(engagementId ?? "")}`),
   session: (id) => apiRequest(`/sessions/${id}`),
   updateSessionModule: (id, module) =>
   apiRequest(`/sessions/${id}/module`, {
@@ -107,10 +122,10 @@ const api = {
     method: "PATCH",
     body: JSON.stringify({ module }),
   }),
-  uploadSession: () => apiRequest("/sessions/upload", { method: "POST" }),
+  uploadSession: (engagementId) => apiRequest("/sessions/upload", { method: "POST", body: JSON.stringify({ engagementId }) }),
   knowledgeObjects: () => apiRequest("/knowledge-objects"),
   coverage: () => apiRequest("/coverage"),
-  smeMap: () => apiRequest("/sme-map"),
+  smeMap: (engagementId) => apiRequest(`/sme-map?engagementId=${encodeURIComponent(engagementId ?? "")}`),
   listConversations: () => apiRequest("/chat/conversations"),
   newConversation: () => apiRequest("/chat/conversations", { method: "POST" }),
   renameConversation: (id, title) => apiRequest(`/chat/conversations/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
@@ -123,26 +138,47 @@ const api = {
   patchGap: (id, status) => apiRequest(`/coverage/gaps/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
   resetDemo: () => apiRequest("/settings/reset", { method: "POST" }),
   settingsStatus: () => apiRequest("/settings/status"),
-  uploadDocument: (file) => {
+  uploadDocument: (file, engagementId) => {
     const fd = new FormData();
     fd.append("file", file);
+    fd.append("engagementId", engagementId);
     return apiUpload("/documents/upload", fd);
   },
-  uploadMedia: (file) => {
+  uploadMedia: (file, engagementId) => {
     const fd = new FormData();
     fd.append("file", file);
+    fd.append("engagementId", engagementId);
     return apiUpload("/media/upload", fd);
   },
-  meetings: () => apiRequest("/meetings"),
-  joinMeeting: (meetingUrl, botName, meetingTitle) => apiRequestSoft("/meetings/join", { method: "POST", body: JSON.stringify({ meetingUrl, botName, meetingTitle }) }),
+  meetings: (engagementId) => apiRequest(`/meetings?engagementId=${encodeURIComponent(engagementId ?? "")}`),
+  joinMeeting: (meetingUrl, botName, meetingTitle, engagementId) => apiRequestSoft("/meetings/join", { method: "POST", body: JSON.stringify({ meetingUrl, botName, meetingTitle, engagementId }) }),
   meetingStatus: (id) => apiRequestSoft(`/meetings/${id}/status`),
   leaveMeeting: (id) => apiRequestSoft(`/meetings/${id}/leave`, { method: "POST" }),
 };
+
+// Every query key below is derived (directly or indirectly) from the
+// modules table and/or the engagements table: module/session/meeting
+// classification, planned-session counts, and engagement metadata all feed
+// into the Dashboard, SME map, Sessions/Meetings module dropdowns, and the
+// Starter page's per-engagement stats. Call this after ANY mutation that
+// can change module definitions, module<->session/meeting classification,
+// or engagement metadata, so every screen reflects it without requiring a
+// manual page refresh.
+function invalidateEngagementScopedQueries(queryClient, engagementId) {
+  queryClient.invalidateQueries({ queryKey: ["engagements"] });
+  queryClient.invalidateQueries({ queryKey: ["modules", engagementId] });
+  queryClient.invalidateQueries({ queryKey: ["dashboard", engagementId] });
+  queryClient.invalidateQueries({ queryKey: ["sme-map", engagementId] });
+  queryClient.invalidateQueries({ queryKey: ["sessions", engagementId] });
+  queryClient.invalidateQueries({ queryKey: ["meetings", engagementId] });
+}
+
 export {
   API_BASE,
   apiRequest,
   apiRequestSoft,
   apiUpload,
   normalizeMeeting,
+  invalidateEngagementScopedQueries,
   api,
 };

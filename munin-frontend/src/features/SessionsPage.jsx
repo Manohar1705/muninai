@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 
 import {
   C,
@@ -15,11 +16,11 @@ import {
   btnGhost,
 } from "../components/common";
 
-import { api } from "../api";
+import { api, invalidateEngagementScopedQueries } from "../api";
 import { SME } from "../constants";
 
 /* ============================== SESSIONS ============================== */
-function SessionRow({ s, onClick, moduleOptions, onRefresh }) {
+function SessionRow({ s, onClick, moduleOptions, onModuleChange, onModuleChanged }) {
   return (
     <button onClick={onClick} style={{
       display: "flex", alignItems: "center", gap: 16, width: "100%", textAlign: "left",
@@ -40,16 +41,16 @@ function SessionRow({ s, onClick, moduleOptions, onRefresh }) {
         onClick={(e) => e.stopPropagation()}
         onChange={async (e) => {
           const newModule = e.target.value;
+          const previous = s.module;
 
           try {
             await api.updateSessionModule(s.id, newModule);
-            // s.module = newModule;
-            window.location.reload(); // Refresh the page to reflect the updated module 
-           
-            console.log("Module updated");
+            onModuleChange(s.id, newModule);
+            onModuleChanged?.();
           } catch (err) {
             console.error(err);
-            alert("Failed to update module");
+            alert(err.message || "Failed to update module");
+            onModuleChange(s.id, previous);
           }
         }}
         style={{
@@ -115,7 +116,7 @@ function UploadFlow({ onComplete, onClose }) {
 
 const overlayStyle = { position: "fixed", inset: 0, background: "rgba(6,6,8,0.72)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 };
 
-function UploadModal({ onClose, onRealUploadComplete }) {
+function UploadModal({ onClose, onRealUploadComplete, engagementId }) {
   const [mode, setMode] = useState("choose"); // choose | demo | uploading-document | uploading-media | error
   const [file, setFile] = useState(null);
   const [error, setError] = useState(null);
@@ -134,7 +135,7 @@ function UploadModal({ onClose, onRealUploadComplete }) {
     setFile(f);
     setError(null);
     setMode("uploading-document");
-    const res = await api.uploadDocument(f);
+    const res = await api.uploadDocument(f, engagementId);
     if (res.ok) onRealUploadComplete(res.data);
     else { setError(res.data?.error || `Upload failed (${res.status}).`); setMode("error"); }
   };
@@ -143,7 +144,7 @@ function UploadModal({ onClose, onRealUploadComplete }) {
     setFile(f);
     setError(null);
     setMode("uploading-media");
-    const res = await api.uploadMedia(f);
+    const res = await api.uploadMedia(f, engagementId);
     if (res.ok) onRealUploadComplete(res.data);
     else { setError(res.data?.error || `Upload failed (${res.status}).`); setMode("error"); }
   };
@@ -215,7 +216,8 @@ function UploadModal({ onClose, onRealUploadComplete }) {
   );
 }
 
-function Sessions({ sessions, modules,onUploadComplete, onRealUpload, jumpTarget, clearJumpTarget }) {
+function Sessions({ sessions, setSessions, modules, engagementId, onUploadComplete, onRealUpload, jumpTarget, clearJumpTarget }) {
+  const queryClient = useQueryClient();
   const [selected, setSelected] = useState(null);
   const [loadingSelected, setLoadingSelected] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -310,7 +312,8 @@ function Sessions({ sessions, modules,onUploadComplete, onRealUpload, jumpTarget
               s={{ ...s, displayNum: index + 1 }}
               moduleOptions={modules}
               onClick={() => openSession(s.id)}
-              
+              onModuleChange={(id, newModule) => setSessions((prev) => prev.map((sess) => (sess.id === id ? { ...sess, module: newModule } : sess)))}
+              onModuleChanged={() => invalidateEngagementScopedQueries(queryClient, engagementId)}
             />
           ))}
         </Card>
@@ -323,6 +326,7 @@ function Sessions({ sessions, modules,onUploadComplete, onRealUpload, jumpTarget
       {uploading && (
         <UploadModal
           onClose={() => setUploading(false)}
+          engagementId={engagementId}
           onRealUploadComplete={async (data) => {
             setUploading(false);
             await onRealUpload(data);
