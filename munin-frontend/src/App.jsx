@@ -19,6 +19,7 @@ import {
 } from "react-router-dom";
 import { api, API_BASE, normalizeMeeting } from "./api";
 import { useQuery, useQueryClient, } from "@tanstack/react-query";
+import EngagementSetupPage from "./features/EngagementSetupPage";
 /* ============================== APP ROOT ============================== */
 
 export default function App() {
@@ -149,7 +150,9 @@ export default function App() {
       
       
       setEngagements(engagementList);
-      setModules(moduleList);
+      setModules(
+        moduleList.map((m) => m.name)
+      );
 
       await Promise.all([]);
     } catch (err) {
@@ -311,7 +314,9 @@ export default function App() {
       <style>{FONT_IMPORT}</style>
       <Sidebar page={page} setPage={setPage} openGapsCount={openGapsCount} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <EngagementHeader />
+        <EngagementHeader
+          engagementName={engagements?.[0]?.name}
+        />
         {configStatus && !dismissConfigBanner && (!configStatus.groqConfigured || !configStatus.recallConfigured || !configStatus.meetingWebhookConfigured) && (
           <div style={{ margin: "0 32px", marginTop: 18, padding: "10px 14px", background: C.amberSofter, border: "1px solid rgba(217,164,65,0.3)", borderRadius: 8, fontSize: 12, color: C.amber, display: "flex", alignItems: "flex-start", gap: 10 }}>
             <Icon d={icons.alert} size={14} />
@@ -415,6 +420,10 @@ export default function App() {
                 goToCitation={goToChatCitation}
               />
             }
+          />
+          <Route
+            path="/engagement-setup"
+            element={<EngagementSetupPage />}
           />
         </Routes>
        

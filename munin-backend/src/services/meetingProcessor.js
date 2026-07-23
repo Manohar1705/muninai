@@ -147,7 +147,7 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
   const sourceLabel = `${meeting.bot_name} (live meeting)`;
   const meetingTopic =
     meeting.meeting_title?.trim() ||
-    guessModule(transcriptText, listModules());
+    guessModule(transcriptText, listModules().map((m) => m.name));
   db.prepare(`
     UPDATE meetings
     SET module = ?

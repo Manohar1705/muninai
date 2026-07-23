@@ -374,6 +374,17 @@ function migrateSchema() {
   if (!meetingCols4.includes("participants")) {
     db.exec(`ALTER TABLE meetings ADD COLUMN participants TEXT`);
   }
+  const moduleCols = db
+    .prepare(`PRAGMA table_info(modules)`)
+    .all()
+    .map((c) => c.name);
+
+  if (!moduleCols.includes("planned_sessions")) {
+    db.exec(`
+      ALTER TABLE modules
+      ADD COLUMN planned_sessions INTEGER NOT NULL DEFAULT 0
+    `);
+  }
 }
 function initDb() {
   db.exec(SCHEMA);

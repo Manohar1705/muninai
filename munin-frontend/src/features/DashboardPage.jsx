@@ -160,10 +160,29 @@ function Dashboard({ stats, readiness, activity, setPage }) {
   return (
     <div style={{ padding: "26px 32px 48px" }}>
       <div style={{ display: "flex", gap: 14, marginBottom: 28, flexWrap: "wrap" }}>
-        <StatCard label="Sessions processed" value={stats.sessionsProcessed} sub={`${stats.transcriptSegments} transcript segments`} />
-        <StatCard label="Knowledge objects" value={stats.knowledgeObjects} sub={`${stats.needsReview} flagged for review`} />
-        <StatCard label="Open gaps" value={stats.openGaps} sub={`${stats.totalGaps} total logged`} />
-        <StatCard label="Overall readiness" value={`${stats.overallReadiness}%`} sub={`Blended across ${Object.keys(readiness).length} modules`} />
+        <StatCard
+          label="Modules covered"
+          value={stats.modulesCovered}
+          sub="Modules with KT activity"
+        />
+
+        <StatCard
+          label="Planned sessions"
+          value={stats.plannedSessions}
+          sub="Across all modules"
+        />
+
+        <StatCard
+          label="Completed sessions"
+          value={stats.completedSessions}
+          sub="KT sessions + meetings"
+        />
+
+        <StatCard
+          label="Overall readiness"
+          value={`${stats.overallReadiness}%`}
+          sub={`Across ${Object.keys(readiness).length} modules`}
+        />
       </div>
 
       <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>

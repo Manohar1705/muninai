@@ -76,6 +76,24 @@ const api = {
       method: "POST",
       body: JSON.stringify({ name, phase }),
     }),
+  updateEngagement: (id, name) =>
+    apiRequest(`/engagements/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ name }),
+    }),
+  createModule: (name) =>
+    apiRequest("/modules", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+
+  updateModulePlan: (name, plannedSessions) =>
+    apiRequest(`/modules/${encodeURIComponent(name)}`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        plannedSessions,
+      }),
+    }),
 
   sessions: () => apiRequest("/sessions"),
   session: (id) => apiRequest(`/sessions/${id}`),

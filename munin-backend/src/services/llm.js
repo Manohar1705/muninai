@@ -106,7 +106,7 @@ async function extractKnowledgeFromText(text, sourceLabel) {
         description: o.description.slice(0, 2000),
         type: typeof o.type === "string" ? o.type : "Other",
         // module: VALID_MODULES.includes(o.module) ? o.module : guessModule(`${o.title} ${o.description}`),
-        module: sanitizeModule(o.module) || guessModule(`${o.title} ${o.description}`, listModules()),
+        module: sanitizeModule(o.module) || guessModule(`${o.title} ${o.description}`, listModules().map((m) => m.name)),
         confidence: typeof o.confidence === "number" ? Math.max(0, Math.min(1, o.confidence)) : 0.5,
       }));
   });

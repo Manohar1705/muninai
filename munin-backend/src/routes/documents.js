@@ -81,7 +81,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 
     const sessionId = `doc-${nanoid(8)}`;
     const now = new Date();
-    const primaryModule = knowledgeObjects[0]?.module || guessModule(trimmed, listModules());
+    const primaryModule = knowledgeObjects[0]?.module || guessModule(trimmed, listModules().map((m)=>m.name));
     ensureModule(primaryModule);
     
 

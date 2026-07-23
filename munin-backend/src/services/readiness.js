@@ -48,10 +48,11 @@ function bumpReadinessForKnowledgeObjects() {
   return {};
 }
 function rebuildReadiness() {
-  const rows = db.prepare(`
-    SELECT module, COUNT(*) AS count
-    FROM knowledge_objects
-    GROUP BY module
+  const modules = db.prepare(`
+    SELECT
+      name,
+      planned_sessions
+    FROM modules
   `).all();
 
   db.prepare(`
@@ -59,24 +60,47 @@ function rebuildReadiness() {
     SET score = 0
   `).run();
 
-  for (const row of rows) {
-    const score = Math.min(row.count * 5, 100);
+  for (const module of modules) {
+    const planned = Number(
+      module.planned_sessions || 0
+    );
+
+    const actual = db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM sessions
+      WHERE module = ?
+      AND (
+        source_type = 'kt_session'
+        OR source_type = 'meeting'
+      )
+    `).get(module.name).count;
+
+    const score =
+      planned > 0
+        ? Math.min(
+            100,
+            Math.round((actual / planned) * 100)
+          )
+        : 0;
 
     db.prepare(`
-      INSERT OR IGNORE INTO readiness (module, score)
+      INSERT OR IGNORE INTO readiness
+      (module, score)
       VALUES (?, ?)
-    `).run(row.module, score);
+    `).run(module.name, score);
 
     db.prepare(`
       UPDATE readiness
       SET score = ?
       WHERE module = ?
-    `).run(score, row.module);
+    `).run(score, module.name);
   }
+
   if (global.broadcastEvent) {
     global.broadcastEvent("dashboard-updated");
   }
 
   console.log("Readiness rebuilt");
 }
+
 module.exports = { bumpReadinessForKnowledgeObjects, rebuildReadiness };

@@ -221,7 +221,7 @@ function Meetings({ meetings, setMeetings, refreshAfterProcessing, goToSession, 
                             {m.module || "No topic assigned"}
                           </Pill>
                         </div>
-                    <button
+                    {/* <button
                       onClick={async () => {
                         const newTopic = prompt(
                           "Edit meeting topic",
@@ -297,7 +297,7 @@ function Meetings({ meetings, setMeetings, refreshAfterProcessing, goToSession, 
                       }}
                     >
                       🗑 Delete
-                    </button>
+                    </button> */}
                       </div>
                     </div>
                     {m.error && (

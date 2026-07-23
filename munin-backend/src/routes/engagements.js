@@ -40,5 +40,35 @@ router.post("/", (req, res) => {
 
   res.json(engagement);
 });
+router.patch("/:id", (req, res) => {
+  const { name } = req.body || {};
 
+  if (!name || !name.trim()) {
+    return res.status(400).json({
+      error: "name is required",
+    });
+  }
+
+  const existing = db
+    .prepare(`SELECT * FROM engagements WHERE id = ?`)
+    .get(req.params.id);
+
+  if (!existing) {
+    return res.status(404).json({
+      error: "Engagement not found",
+    });
+  }
+
+  db.prepare(`
+    UPDATE engagements
+    SET name = ?
+    WHERE id = ?
+  `).run(name.trim(), req.params.id);
+
+  const updated = db
+    .prepare(`SELECT * FROM engagements WHERE id = ?`)
+    .get(req.params.id);
+
+  res.json(updated);
+});
 module.exports = router;

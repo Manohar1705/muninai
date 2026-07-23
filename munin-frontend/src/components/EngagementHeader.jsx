@@ -22,13 +22,13 @@ function PhaseTracker({ current }) {
     </div>
   );
 }
-function EngagementHeader() { 
+function EngagementHeader({ engagementName }) { 
   return (
     <div style={{ padding: "22px 32px 18px", borderBottom: `1px solid ${C.border}` }}>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
         <div>
           <div style={{ fontSize: 11, color: C.textFaint, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>Engagement</div>
-          <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>Nova Payments Platform — Transition to New Vendor</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 500, margin: 0 }}>{engagementName || "Unnamed Engagement"}</h1>
         </div>
         <PhaseTracker current="Reverse Shadow" />
       </div>

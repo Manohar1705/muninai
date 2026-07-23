@@ -19,6 +19,7 @@ function Sidebar({ page, setPage, openGapsCount}) {
     { id: "coverage", label: "Coverage", icon: icons.coverage, badge: openGapsCount },
     { id: "sme", label: "SME map", icon: icons.sme },
     { id: "chat", label: "Ask Munin", icon: icons.chat },
+    { id: "engagementSetup", label: "Engagement Setup", icon: icons.settings },
   ];
   const routeMap = {
     dashboard: "/dashboard",
@@ -28,6 +29,7 @@ function Sidebar({ page, setPage, openGapsCount}) {
     coverage: "/coverage",
     sme: "/sme",
     chat: "/chat",
+    engagementSetup: "/engagement-setup",
   };
   return (
     <div style={{ width: 236, flexShrink: 0, background: C.bgRaised, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", padding: "22px 14px" }}>
