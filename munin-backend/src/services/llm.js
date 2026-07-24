@@ -124,7 +124,7 @@ async function extractKnowledgeFromText(text, sourceLabel, engagementId) {
 function shortlistCandidates(question, knowledgeObjects, limit = 50) {
   const qWords = tokenize(question);
   const scored = knowledgeObjects.map((k) => {
-    const haystack = `${k.title} ${k.description} ${k.module} ${k.type}`.toLowerCase();
+    const haystack = `${k.title} ${k.description} ${k.module} ${k.type} ${k.source || ""} ${k.sessionId || ""}`.toLowerCase();
     let score = 0;
     for (const w of qWords) if (haystack.includes(w)) score += 1;
     return { k, score };
@@ -143,8 +143,9 @@ function shortlistCandidates(question, knowledgeObjects, limit = 50) {
 
 function buildSystemPrompt(candidates, dbContext = {}, conversationStats = {}) {
   const context = candidates
-    .map((k, i) => `[${i + 1}] id=${k.id} module=${k.module} type=${k.type} title="${k.title}"
+    .map((k, i) => `[${i + 1}] id=${k.id} sessionId=${k.sessionId || ""} module=${k.module} type=${k.type} title="${k.title}"
 description: ${k.description}
+speaker=${k.speaker || "unknown"}
 source: ${k.source}`)
     .join("\n\n");
 
@@ -275,7 +276,7 @@ ${(dbContext.readinessSummary || [])
 
 
 async function askLlm(question, knowledgeObjects, history = [], dbContext = {}, conversationStats = {}) {
-  const candidates = shortlistCandidates(question, knowledgeObjects, 25);
+  const candidates = shortlistCandidates(question, knowledgeObjects, 50);
   const system = buildSystemPrompt(candidates, dbContext, conversationStats);
   const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
  

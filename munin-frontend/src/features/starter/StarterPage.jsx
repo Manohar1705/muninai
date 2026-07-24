@@ -10,10 +10,10 @@ import {
   ProgressBar,
   btnPrimary,
   btnGhost,
-} from "../components/common";
-import { PHASES } from "../constants";
-import { api } from "../api";
+} from "../../shared/components/common";
+import { PHASES } from "../../shared/constants/constants";
 
+import { engagementApi } from "../engagement/api";
 /* ============================== STARTER PAGE ============================== */
 // Home/landing screen for picking (or starting) an engagement. This is the
 // "source of truth" list of engagements — each one owns its own modules,
@@ -209,7 +209,7 @@ function NewEngagementView({ onCreated, onCancel }) {
     setSaving(true);
     setError(null);
     try {
-      const created = await api.createEngagement(name.trim(), phase, details.trim());
+      const created = await engagementApi.createEngagement(name.trim(), phase, details.trim());
       onCreated(created);
     } catch (err) {
       console.error(err);
@@ -292,7 +292,7 @@ function StarterPage({ onSelectEngagement }) {
   const load = () => {
     setLoading(true);
     setError(null);
-    api.engagements()
+    engagementApi.engagements()
       .then(setEngagements)
       .catch((err) => {
         console.error(err);

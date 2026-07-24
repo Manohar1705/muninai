@@ -13,15 +13,15 @@ function loadKnowledgeObjects() {
     id: k.id, title: k.title, type: k.type, module: k.module,
     description: k.description, confidence: k.confidence,
     needsReview: !!k.needs_review, source: k.source,
-    sessionId: k.session_id, timestamp: k.segment_timestamp,
+    sessionId: k.session_id, timestamp: k.segment_timestamp, speaker: k.speaker,
   }));
 }
 
 function loadTranscriptSegments() {
   const rows = db
     .prepare(
-      `SELECT ts.id AS segId, ts.session_id AS sessionId, ts.timestamp AS timestamp,
-              ts.text AS text, s.title AS sessionTitle, s.module AS module,
+      `SELECT ts.id AS segId, ts.session_id AS sessionId, ts.timestamp AS timestamp, ts.speaker AS speaker,
+              ts.text AS text, s.title AS sessionTitle, s.num AS sessionNum, s.module AS module,
               s.source_type AS sourceType
        FROM transcript_segments ts
        JOIN sessions s ON s.id = ts.session_id`
@@ -30,14 +30,14 @@ function loadTranscriptSegments() {
  
   return rows.map((r) => ({
     id: `seg-${r.segId}`,
-    title: `Full transcript — ${r.sessionTitle}`,
+    title: `Session ${r.sessionNum} — ${r.sessionTitle}`,
     type: "Transcript",
     module: r.module,
     description: r.text.slice(0, 1500),
     confidence: 1,
     needsReview: false,
     source: `${r.sessionTitle} (${r.sourceType}), ${r.timestamp}`,
-    sessionId: r.sessionId, timestamp: r.timestamp,
+    sessionId: r.sessionId, timestamp: r.timestamp, speaker: r.speaker,
   }));
 }
 

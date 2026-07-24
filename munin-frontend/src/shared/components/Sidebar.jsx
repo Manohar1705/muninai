@@ -8,7 +8,7 @@ import {
   icons,
 } from "./common";
 /* ============================== SIDEBAR ============================== */
-function Sidebar({ page, setPage, openGapsCount, onSwitchEngagement }) {
+function Sidebar({ openGapsCount, onSwitchEngagement }) {
     const navigate = useNavigate();
     const location = useLocation();
   const items = [
@@ -47,7 +47,7 @@ function Sidebar({ page, setPage, openGapsCount, onSwitchEngagement }) {
           return (
             <button key={it.id}
             onClick={() => {
-                setPage?.(it.id);
+              
                 navigate(routeMap[it.id]);
             }}
 

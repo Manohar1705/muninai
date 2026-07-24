@@ -7,7 +7,7 @@ import {
   icons,
   Section,
   Card,
-} from "../components/common";
+} from "../../shared/components/common";
 
  
 /* ============================== SME MAP ============================== */

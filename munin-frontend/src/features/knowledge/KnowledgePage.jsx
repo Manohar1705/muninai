@@ -11,9 +11,23 @@ import {
   Icon,
   icons,
   btnGhost,
-} from "../components/common";
+} from "../../shared/components/common";
+import { useKnowledge } from "./hooks/useKnowledge";
+import { useNavigate } from "react-router-dom";
 /* ============================== KNOWLEDGE BASE ============================== */
-function KnowledgeBase({ knowledgeObjects, goToTranscript }) {
+function KnowledgeBase() {
+  const { knowledgeObjects } = useKnowledge();
+  const navigate = useNavigate();
+  const goToTranscript = (ko) => {
+    const segTime = ko.source.split(", ").pop();
+
+    navigate("/sessions", {
+      state: {
+        sessionId: ko.sessionId,
+        segTime,
+      },
+    });
+  };
   const [q, setQ] = useState("");
   const [module, setModule] = useState("All");
   const [type, setType] = useState("All");

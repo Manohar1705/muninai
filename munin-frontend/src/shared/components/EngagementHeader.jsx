@@ -1,6 +1,6 @@
 import React from "react";
 import { C, Icon, icons } from "./common";
-import { PHASES } from "../constants";
+import { PHASES } from "../constants/constants";
 /* ============================== ENGAGEMENT HEADER ============================== */
 function PhaseTracker({ current }) {
   const idx = PHASES.indexOf(current);
@@ -45,7 +45,7 @@ function EngagementHeader({ engagementName, engagementPhase, onSwitchEngagement 
         <div style={{ fontSize: 11, color: C.textFaint, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 4 }}>Engagement</div>
         <h1 style={{ fontSize: 20, fontWeight: 500, margin: "0 0 16px" }}>{engagementName || "Unnamed Engagement"}</h1>
       </div>
-      <PhaseTracker current={engagementPhase || PHASES[0]} />
+      {/* <PhaseTracker current={engagementPhase || PHASES[0]} /> */}
     </div>
   );
 }

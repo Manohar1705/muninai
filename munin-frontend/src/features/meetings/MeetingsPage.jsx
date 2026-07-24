@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-
+import { meetingsApi } from "./api";
 import {
   C,
   FF,
@@ -11,14 +11,16 @@ import {
   icons,
   btnPrimary,
   btnGhost,
-} from "../components/common";
+} from "../../shared/components/common";
 
 import {
   api,
   normalizeMeeting,
   apiRequest,
   invalidateEngagementScopedQueries,
-} from "../api";
+} from "../../shared/api/client";
+import { useMeetings } from "./hooks/useMeetings";
+import { useNavigate } from "react-router-dom";
 /* ============================== MEETINGS ============================== */
 const MEETING_TERMINAL = new Set(["call_ended", "done", "error", "fatal"]);
 
@@ -38,8 +40,19 @@ function meetingStatusMeta(status) {
   return map[status] || { label: status || "Unknown", tone: "default" };
 }
 
-function Meetings({ meetings, setMeetings, refreshAfterProcessing, goToSession, configStatus, engagementId, modules }) {
+function Meetings({ configStatus, engagementId, modules }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  const goToSession = (sessionId) => {
+    navigate("/sessions", {
+      state: {
+        sessionId,
+        segTime: undefined,
+      },
+    });
+  };
+  const { meetings, setMeetings } = useMeetings(engagementId);
   const [url, setUrl] = useState("");
   const [botName, setBotName] = useState("Munin");
   const [meetingTitle, setMeetingTitle] = useState("");
@@ -57,11 +70,15 @@ function Meetings({ meetings, setMeetings, refreshAfterProcessing, goToSession, 
   };
 
   const pollMeeting = async (id) => {
-    const res = await api.meetingStatus(id);
+    const res = await meetingsApi.meetingStatus(id);
     if (res.ok && res.data?.meeting) {
       const merged = normalizeMeeting(res.data.meeting);
       setMeetings((prev) => prev.map((m) => (m.id === id ? { ...m, ...merged, warning: res.data.warning || null } : m)));
-      if (merged.sessionId) refreshAfterProcessing();
+      if (merged.sessionId) {
+        queryClient.invalidateQueries({
+          queryKey: ["dashboard"],
+        });
+      }
       if (!MEETING_TERMINAL.has(merged.status)) schedulePoll(id);
     } else {
       // Transient polling failure (backend hiccup, etc) — keep last-known
@@ -88,7 +105,7 @@ function Meetings({ meetings, setMeetings, refreshAfterProcessing, goToSession, 
     setJoining(true);
     setJoinError(null);
     try {
-      const res = await api.joinMeeting(url.trim(), botName.trim() || "Munin", meetingTitle.trim(), engagementId);
+      const res = await meetingsApi.joinMeeting(url.trim(), botName.trim() || "Munin", meetingTitle.trim(), engagementId);
       const meeting = res.data?.meeting ? normalizeMeeting(res.data.meeting) : null;
       if (meeting) {
         setMeetings((prev) => [meeting, ...prev]);
@@ -105,7 +122,7 @@ function Meetings({ meetings, setMeetings, refreshAfterProcessing, goToSession, 
   const handleLeave = async (id) => {
     setLeavingId(id);
     try {
-      const res = await api.leaveMeeting(id);
+      const res = await meetingsApi.leaveMeeting(id);
       if (res.ok && res.data?.meeting) {
         setMeetings((prev) => prev.map((m) => (m.id === id ? { ...m, ...normalizeMeeting(res.data.meeting) } : m)));
       } else if (!res.ok) {
@@ -238,7 +255,7 @@ function Meetings({ meetings, setMeetings, refreshAfterProcessing, goToSession, 
                               const previous = m.module;
                               setMeetings((prev) => prev.map((meeting) => (meeting.id === m.id ? { ...meeting, module: newModule } : meeting)));
                               try {
-                                await api.updateMeetingModule(m.id, newModule);
+                                await meetingsApi.updateMeetingModule(m.id, newModule);
                                 // Reclassifying shifts completed-session counts
                                 // between modules (and can drop an orphaned
                                 // module), so the Dashboard/SME map/Engagement
@@ -262,7 +279,7 @@ function Meetings({ meetings, setMeetings, refreshAfterProcessing, goToSession, 
                           >
                             <option value="Unclassified">Unclassified</option>
                             {modules.map((mod) => (
-                              <option key={mod} value={mod}>{mod}</option>
+                              <option key={mod.name} value={mod.name}>{mod.name}</option>
                             ))}
                           </select>
                           <button

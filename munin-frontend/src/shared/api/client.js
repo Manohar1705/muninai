@@ -66,74 +66,7 @@ function normalizeMeeting(m) {
 }
 
 const api = {
-  dashboard: (engagementId) => apiRequest(`/dashboard?engagementId=${encodeURIComponent(engagementId ?? "")}`),
-
-  engagements: () => apiRequest("/engagements"),
-  modules: (engagementId) => apiRequest(`/modules?engagementId=${encodeURIComponent(engagementId ?? "")}`),
-
-  createEngagement: (name, phase, details) =>
-    apiRequest("/engagements", {
-      method: "POST",
-      body: JSON.stringify({ name, phase, details }),
-    }),
-  updateEngagement: (id, name, details) =>
-    apiRequest(`/engagements/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify({ name, details }),
-    }),
-  deleteEngagement: (id) =>
-    apiRequest(`/engagements/${id}`, { method: "DELETE" }),
-  createModule: (name, engagementId) =>
-    apiRequest("/modules", {
-      method: "POST",
-      body: JSON.stringify({ name, engagementId }),
-    }),
-
-  updateModulePlan: (name, plannedSessions, engagementId) =>
-    apiRequest(`/modules/${encodeURIComponent(name)}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        plannedSessions,
-        engagementId,
-      }),
-    }),
-  renameModule: (name, newName, engagementId) =>
-    apiRequest(`/modules/${encodeURIComponent(name)}`, {
-      method: "PATCH",
-      body: JSON.stringify({
-        newName,
-        engagementId,
-      }),
-    }),
-  deleteModule: (name, engagementId) =>
-    apiRequest(`/modules/${encodeURIComponent(name)}?engagementId=${encodeURIComponent(engagementId ?? "")}`, {
-      method: "DELETE",
-    }),
-
-  sessions: (engagementId) => apiRequest(`/sessions?engagementId=${encodeURIComponent(engagementId ?? "")}`),
-  session: (id) => apiRequest(`/sessions/${id}`),
-  updateSessionModule: (id, module) =>
-  apiRequest(`/sessions/${id}/module`, {
-    method: "PATCH",
-    body: JSON.stringify({ module }),
-  }),
-  updateMeetingModule: (id, module) =>
-  apiRequest(`/meetings/${id}/module`, {
-    method: "PATCH",
-    body: JSON.stringify({ module }),
-  }),
-  uploadSession: (engagementId) => apiRequest("/sessions/upload", { method: "POST", body: JSON.stringify({ engagementId }) }),
-  knowledgeObjects: () => apiRequest("/knowledge-objects"),
-  coverage: () => apiRequest("/coverage"),
-  smeMap: (engagementId) => apiRequest(`/sme-map?engagementId=${encodeURIComponent(engagementId ?? "")}`),
-  listConversations: () => apiRequest("/chat/conversations"),
-  newConversation: () => apiRequest("/chat/conversations", { method: "POST" }),
-  renameConversation: (id, title) => apiRequest(`/chat/conversations/${id}`, { method: "PATCH", body: JSON.stringify({ title }) }),
-  pinConversation: (id, pinned) => apiRequest(`/chat/conversations/${id}/pin`, { method: "PATCH", body: JSON.stringify({ pinned }) }),
-  archiveConversation: (id, archived) => apiRequest(`/chat/conversations/${id}/archive`, { method: "PATCH", body: JSON.stringify({ archived }) }),
-  deleteConversation: (id) => apiRequest(`/chat/conversations/${id}`, { method: "DELETE" }),
-  chatHistory: (conversationId) => apiRequest(`/chat/history?conversationId=${encodeURIComponent(conversationId || "")}`),
-  chat: (message, conversationId) => apiRequest("/chat", { method: "POST", body: JSON.stringify({ message, conversationId }) }),
+ 
 
   patchGap: (id, status) => apiRequest(`/coverage/gaps/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
   resetDemo: () => apiRequest("/settings/reset", { method: "POST" }),
@@ -150,10 +83,6 @@ const api = {
     fd.append("engagementId", engagementId);
     return apiUpload("/media/upload", fd);
   },
-  meetings: (engagementId) => apiRequest(`/meetings?engagementId=${encodeURIComponent(engagementId ?? "")}`),
-  joinMeeting: (meetingUrl, botName, meetingTitle, engagementId) => apiRequestSoft("/meetings/join", { method: "POST", body: JSON.stringify({ meetingUrl, botName, meetingTitle, engagementId }) }),
-  meetingStatus: (id) => apiRequestSoft(`/meetings/${id}/status`),
-  leaveMeeting: (id) => apiRequestSoft(`/meetings/${id}/leave`, { method: "POST" }),
 };
 
 // Every query key below is derived (directly or indirectly) from the
