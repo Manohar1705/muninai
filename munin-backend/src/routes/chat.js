@@ -133,7 +133,7 @@ function buildDatabaseContext() {
   const engagement = db
   .prepare(`
     SELECT name, phase
-    FROM engagement
+    FROM engagements
     LIMIT 1
   `)
   .get();
