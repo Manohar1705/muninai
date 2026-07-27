@@ -23,6 +23,12 @@ The backend integrates with Recall.ai for meeting participation, Groq for AI-pow
 
 ## Key Features
 
+### Multi-Engagement Support
+
+- Create, rename, and delete engagements
+- Modules, sessions, meetings, and dashboards are scoped per engagement
+- Module names are namespaced per engagement, so two engagements can each define a module with the same name
+
 ### Knowledge Capture
 
 - Live meeting transcript ingestion
@@ -114,7 +120,7 @@ GROQ_WHISPER_MODEL=whisper-large-v3-turbo
 DEMO_SSO_TOKEN=munin-demo-sso-token
 
 RECALL_API_KEY=<your-recall-api-key>
-RECALL_API_REGION=ap-northeast-1
+RECALL_API_REGION=<your-recall-project-region>
 
 PUBLIC_BASE_URL=
 
@@ -125,6 +131,7 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 
 ### Notes
 
+- Set `RECALL_API_REGION` to the region shown in your own Recall.ai project settings — it varies per account and isn't a fixed value.
 - Leave `PUBLIC_BASE_URL` empty.
 - Cloudflare Tunnel is started automatically.
 - `PUBLIC_BASE_URL` is generated dynamically during application startup.
@@ -216,9 +223,126 @@ This is a demo-only click-through authentication endpoint.
 
 ---
 
+## Engagements
+
+### GET /api/engagements
+
+Returns all engagements.
+
+---
+
+### POST /api/engagements
+
+Request:
+
+```json
+{
+  "name": "Acme Payments Transition",
+  "phase": "Discovery",
+  "details": "Optional free-text context"
+}
+```
+
+Creates a new engagement. New engagements start with no modules, sessions, or meetings.
+
+---
+
+### PATCH /api/engagements/:id
+
+Request (any subset of fields):
+
+```json
+{
+  "name": "Acme Payments Transition — Phase 2",
+  "phase": "Execution",
+  "details": "Updated context"
+}
+```
+
+Updates an existing engagement.
+
+---
+
+### DELETE /api/engagements/:id
+
+Deletes an engagement and cascades deletion to its modules, sessions, and meetings.
+
+---
+
+## Modules
+
+Modules are namespaced per engagement — two engagements may each define a module with the same name independently.
+
+### GET /api/modules
+
+Query Parameters:
+
+```text
+engagementId=
+```
+
+Returns modules. If `engagementId` is omitted, returns modules across all engagements.
+
+---
+
+### POST /api/modules
+
+Request:
+
+```json
+{
+  "engagementId": 1,
+  "name": "Payments Core",
+  "plannedSessions": 4
+}
+```
+
+Creates a module scoped to the given engagement.
+
+---
+
+### PATCH /api/modules/:name
+
+Query Parameters:
+
+```text
+engagementId=
+```
+
+Request (any subset of fields):
+
+```json
+{
+  "newName": "Payments Core v2",
+  "plannedSessions": 6
+}
+```
+
+Renames a module and/or updates its planned-session count. Planned sessions cannot be set below the module's completed-session count. Renaming cascades the new name to every session, meeting, knowledge object, gap, and readiness record that referenced the old name.
+
+---
+
+### DELETE /api/modules/:name
+
+Query Parameters:
+
+```text
+engagementId=
+```
+
+Deletes a module. Fails if any session or meeting is already classified under it — reclassify them first.
+
+---
+
 ## Dashboard
 
 ### GET /api/dashboard
+
+Query Parameters:
+
+```text
+engagementId=
+```
 
 Returns:
 
@@ -245,7 +369,13 @@ Example:
 
 ### GET /api/sessions
 
-Returns a lightweight session list.
+Query Parameters:
+
+```text
+engagementId=
+```
+
+Returns a lightweight session list. If `engagementId` is omitted, returns sessions across all engagements.
 
 ---
 
@@ -354,6 +484,12 @@ Allowed values:
 
 ### GET /api/sme-map
 
+Query Parameters:
+
+```text
+engagementId=
+```
+
 Returns:
 
 ```json
@@ -446,6 +582,8 @@ Capabilities:
 - Knowledge extraction
 - Final session processing
 
+Meeting classification is restricted to modules already defined for that meeting's engagement, plus `Unclassified`. If an engagement has no modules defined yet, meetings and documents classify as `Unclassified` until at least one module exists.
+
 ---
 
 ## Audio Transcription
@@ -477,6 +615,12 @@ Knowledge Extraction
 ---
 
 ## Settings
+
+### GET /api/settings/status
+
+Returns which integrations are currently configured (Groq, Recall.ai, webhook reachability). Used by the frontend to show configuration warnings.
+
+---
 
 ### POST /api/settings/reset
 
@@ -613,18 +757,20 @@ Cloudflare Tunnel:
 
 ---
 
+## Current Limitations
+
+- Authentication is demo-only; the SSO route is a click-through token exchange, not real identity.
+- Authorization, tenant isolation, and role-based access control are not implemented.
+- Recall webhook signature verification is not implemented.
+- CORS defaults to `*` when `CORS_ORIGIN` is unset.
+- Cloudflare automatic tunnel startup invokes `cmd.exe` and is Windows-specific.
+- No automated backend tests yet.
+
+---
+
 ## Future Enhancements
 
-Potential future improvements:
-
-- Jira integration
-- ServiceNow integration
-- Slack notifications
-- Microsoft Teams notifications
 - Production-grade authentication
-- Multi-engagement support
-- Multi-tenant architecture
-- Knowledge quality scoring
-- Automated meeting summaries
-- Advanced analytics dashboards
+- Multi-tenant architecture (beyond current multi-engagement scoping)
+- Automated backend tests
 - Cloud deployment automation
