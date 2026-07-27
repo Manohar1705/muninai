@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   BarChart,
   Bar,
@@ -23,6 +24,7 @@ import {
   ProgressBar,
 } from "../../shared/components/common";
 import ReadinessChart from "./ui/ReadinessChart";
+import { useDashboard } from "./hooks/useDashboard";
 /* ============================== DASHBOARD ============================== */
 function StatCard({ label, value, sub }) {
   return (
@@ -34,7 +36,9 @@ function StatCard({ label, value, sub }) {
   );
 }
 
-function Dashboard({ stats, readiness, activity, setPage }) {
+function Dashboard({ engagementId }) {
+  const navigate = useNavigate();
+  const { stats, readiness, activity } = useDashboard(engagementId);
   return (
     <div style={{ padding: "26px 32px 48px" }}>
       <Card style={{ padding: "18px 20px", marginBottom: 20 }}>
@@ -97,8 +101,8 @@ function Dashboard({ stats, readiness, activity, setPage }) {
       </div>
 
       <div style={{ marginTop: 24, display: "flex", gap: 10 }}>
-        <button onClick={() => setPage("sessions")} style={btnPrimary}>Go to sessions <Icon d={icons.arrowRight} size={14} /></button>
-        <button onClick={() => setPage("coverage")} style={btnGhost}>Review open gaps</button>
+        <button onClick={() => navigate("/sessions")} style={btnPrimary}>Go to sessions <Icon d={icons.arrowRight} size={14} /></button>
+        <button onClick={() => navigate("/coverage")} style={btnGhost}>Review open gaps</button>
       </div>
     </div>
   );

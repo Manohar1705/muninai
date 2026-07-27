@@ -7,8 +7,6 @@ import {
   Icon,
   icons,
 } from "../../../shared/components/common";
-
-import { api } from "../../../shared/api/client";
 import { sessionsApi } from "../api";
 function SessionRow({ s, onClick, moduleOptions, onModuleChange, onModuleChanged }) {
   return (

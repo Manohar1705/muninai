@@ -44,45 +44,12 @@ async function apiUpload(path, formData) {
 // casing: POST /join responds camelCase ({ botId, meetingUrl, botName }),
 // while GET /:id/status and GET / return the raw snake_case DB row. This
 // normalizes either shape into one the UI can rely on.
-function normalizeMeeting(m) {
-  if (!m) return m;
-  return {
-    id: m.id,
-    botId: m.botId ?? m.bot_id ?? null,
-    meetingUrl: m.meetingUrl ?? m.meeting_url ?? "",
-    botName: m.botName ?? m.bot_name ?? "Munin",
-    meetingTitle: m.meetingTitle ?? m.meeting_title ?? null,
-    status: m.status,
-    sessionId: m.sessionId ?? m.session_id ?? null,
-    module: m.module ?? null,
-    warning: m.warning ?? null,
-    error: m.error ?? null,
-    createdAt: m.createdAt ?? m.created_at ?? null, 
-    participants: m.participants
-      ? JSON.parse(m.participants)
-      : [],
-    durationSeconds: m.durationSeconds ?? null,
-  };
-}
+
 
 const api = {
- 
-
   patchGap: (id, status) => apiRequest(`/coverage/gaps/${id}`, { method: "PATCH", body: JSON.stringify({ status }) }),
   resetDemo: () => apiRequest("/settings/reset", { method: "POST" }),
   settingsStatus: () => apiRequest("/settings/status"),
-  uploadDocument: (file, engagementId) => {
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("engagementId", engagementId);
-    return apiUpload("/documents/upload", fd);
-  },
-  uploadMedia: (file, engagementId) => {
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("engagementId", engagementId);
-    return apiUpload("/media/upload", fd);
-  },
 };
 
 // Every query key below is derived (directly or indirectly) from the
@@ -107,7 +74,6 @@ export {
   apiRequest,
   apiRequestSoft,
   apiUpload,
-  normalizeMeeting,
   invalidateEngagementScopedQueries,
   api,
 };

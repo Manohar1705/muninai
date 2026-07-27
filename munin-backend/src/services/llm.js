@@ -138,7 +138,8 @@ function shortlistCandidates(question, knowledgeObjects, limit = 50) {
     return matches.slice(0, limit).map((s) => s.k);
   }
 
-  return scored.slice(0, Math.min(limit, 30)).map((s) => s.k);
+  // return scored.slice(0, Math.min(limit, 30)).map((s) => s.k);
+  return [];
 }
 
 function buildSystemPrompt(candidates, dbContext = {}, conversationStats = {}) {

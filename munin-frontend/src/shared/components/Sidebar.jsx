@@ -7,8 +7,10 @@ import {
   IconRaven,
   icons,
 } from "./common";
+import { useOpenGapsCount } from "../hooks/useOpenGapsCount";
 /* ============================== SIDEBAR ============================== */
-function Sidebar({ openGapsCount, onSwitchEngagement }) {
+function Sidebar({ onSwitchEngagement }) {
+    const openGapsCount = useOpenGapsCount();
     const navigate = useNavigate();
     const location = useLocation();
   const items = [

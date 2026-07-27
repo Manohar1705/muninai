@@ -1,127 +1,31 @@
 import React, { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { Card, Section, C, FF, Icon, icons, ProgressBar, btnPrimary, btnGhost } from "../../shared/components/common";
-import { api, invalidateEngagementScopedQueries } from "../../shared/api/client";
 import ModuleRow from "./ui/ModuleRow";
-import { engagementApi } from "./api";
+import { useEngagementSetup } from "./hooks/useEngagementSetup";
 
 function EngagementSetupPage({ engagementId }) {
-  
+  const {
+    engagement, modules, saving, deletingEngagement,
+    save, addModule, updatePlan, renameModule,
+    deleteModuleHandler, deleteEngagementHandler,
+  } = useEngagementSetup(engagementId);
 
-  const queryClient = useQueryClient();
-  const [engagement, setEngagement] = useState(null);
   const [name, setName] = useState("");
   const [details, setDetails] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [modules, setModules] = useState([]);
   const [newModule, setNewModule] = useState("");
 
-  const loadModules = () => {
-    if (!engagementId) return;
-    engagementApi.modules(engagementId).then(setModules);
-  };
-
   useEffect(() => {
-    if (!engagementId) return;
-    engagementApi.engagements().then((rows) => {
-      const found = rows.find((r) => r.id === engagementId);
-      if (found) {
-        setEngagement(found);
-        setName(found.name);
-        setDetails(found.details || "");
-      }
-    });
-    loadModules();
-  }, [engagementId]);
-
-  const save = async () => {
-    if (!engagement) return;
-    if (!name.trim()) {
-      alert("Engagement name is required.");
-      return;
+    if (engagement) {
+      setName(engagement.name);
+      setDetails(engagement.details || "");
     }
+  }, [engagement]);
 
-    try {
-      setSaving(true);
-      const updated = await engagementApi.updateEngagement(engagement.id, name.trim(), details);
-      setEngagement(updated);
-      setName(updated.name);
-      setDetails(updated.details || "");
-      invalidateEngagementScopedQueries(queryClient, engagementId);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to save engagement");
-    } finally {
-      setSaving(false);
-    }
-  };
+  const handleSave = () => save(name, details);
+  const handleAddModule = () => { addModule(newModule); setNewModule(""); };
+  
 
-  const addModule = async () => {
-    const trimmed = newModule.trim();
-    if (!trimmed) return;
 
-    if (modules.some((m) => m.name.toLowerCase() === trimmed.toLowerCase())) {
-      return;
-    }
-
-    try {
-      await engagementApi.createModule(trimmed, engagementId);
-      setModules((prev) => [...prev, { name: trimmed, planned_sessions: 0, completed_sessions: 0 }]);
-      setNewModule("");
-      invalidateEngagementScopedQueries(queryClient, engagementId);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to create module");
-    }
-  };
-
-  const updatePlan = async (moduleName, value) => {
-    const next = Number(value || 0);
-
-    setModules((prev) =>
-      prev.map((m) => (m.name === moduleName ? { ...m, planned_sessions: next } : m))
-    );
-
-    try {
-      await engagementApi.updateModulePlan(moduleName, next, engagementId);
-      invalidateEngagementScopedQueries(queryClient, engagementId);
-    } catch (err) {
-      console.error(err);
-      alert(err.message || "Planned sessions cannot be less than completed sessions.");
-      loadModules();
-    }
-  };
-
-  const renameModule = async (oldName, newName) => {
-    await engagementApi.renameModule(oldName, newName, engagementId);
-    setModules((prev) => prev.map((m) => (m.name === oldName ? { ...m, name: newName } : m)));
-    invalidateEngagementScopedQueries(queryClient, engagementId);
-  };
-
-  const deleteModuleHandler = async (moduleName) => {
-    await engagementApi.deleteModule(moduleName, engagementId);
-    setModules((prev) => prev.filter((m) => m.name !== moduleName));
-    invalidateEngagementScopedQueries(queryClient, engagementId);
-  };
-
-  const [deletingEngagement, setDeletingEngagement] = useState(false);
-  const deleteEngagementHandler = async () => {
-    if (!engagement) return;
-    if (!confirm(`Delete engagement "${engagement.name}"? This can't be undone.`)) return;
-    setDeletingEngagement(true);
-    try {
-      await engagementApi.deleteEngagement(engagement.id);
-      // Once ["engagements"] refetches without this id, App.jsx's own
-      // safety-net effect (currentEngagementId no longer in the list) drops
-      // the user back to the Starter page — no extra navigation needed here.
-      await queryClient.invalidateQueries({ queryKey: ["engagements"] });
-    } catch (err) {
-      console.error(err);
-      alert(err.message || "Failed to delete engagement.");
-    } finally {
-      setDeletingEngagement(false);
-    }
-  };
 
   const inputStyle = {
     background: C.bgRaised,
@@ -161,7 +65,7 @@ function EngagementSetupPage({ engagementId }) {
                 />
               </div>
               <div>
-                <button onClick={save} disabled={saving} style={btnPrimary}>
+                <button onClick={handleSave} disabled={saving} style={btnPrimary}>
                   {saving ? "Saving..." : "Save"}
                 </button>
               </div>
@@ -188,7 +92,7 @@ function EngagementSetupPage({ engagementId }) {
                 placeholder="Add module..."
                 style={{ ...inputStyle, flex: 1 }}
               />
-              <button onClick={addModule} style={btnPrimary}>Add</button>
+              <button onClick={handleAddModule} style={btnPrimary}>Add</button>
             </div>
 
             <div style={{ border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden" }}>

@@ -10,7 +10,7 @@ import {
   btnGhost,
 } from "../../../shared/components/common";
 
-import { api } from "../../../shared/api/client";
+import { sessionsApi } from "../api";
 function UploadFlow({ onComplete, onClose }) {
   const [step, setStep] = useState(0);
   const steps = ["Transcribing", "Extracting", "Indexing"];
@@ -68,7 +68,7 @@ function UploadModal({ onClose, onRealUploadComplete, engagementId }) {
     setFile(f);
     setError(null);
     setMode("uploading-document");
-    const res = await api.uploadDocument(f, engagementId);
+    const res = await sessionsApi.uploadDocument(f, engagementId);
     if (res.ok) onRealUploadComplete(res.data);
     else { setError(res.data?.error || `Upload failed (${res.status}).`); setMode("error"); }
   };
@@ -77,7 +77,7 @@ function UploadModal({ onClose, onRealUploadComplete, engagementId }) {
     setFile(f);
     setError(null);
     setMode("uploading-media");
-    const res = await api.uploadMedia(f, engagementId);
+    const res = await sessionsApi.uploadMedia(f, engagementId);
     if (res.ok) onRealUploadComplete(res.data);
     else { setError(res.data?.error || `Upload failed (${res.status}).`); setMode("error"); }
   };

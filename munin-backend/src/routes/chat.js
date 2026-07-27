@@ -512,7 +512,6 @@ router.get("/history", (req, res) => {
 
 // POST /api/chat  { message: string }
 router.post("/", async (req, res) => {
-  console.log("CHAT ROUTE HIT");
   
   const { message, conversationId: incomingId } = req.body || {};
   if (!message || !String(message).trim()) {

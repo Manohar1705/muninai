@@ -16,66 +16,29 @@ import {
   btnGhost,
 } from "../../shared/components/common";
 
-import { api, invalidateEngagementScopedQueries } from "../../shared/api/client";
+import { invalidateEngagementScopedQueries } from "../../shared/api/client";
 import { SME } from "../../shared/constants/constants";
 import SessionRow from "./ui/SessionRow";
 import UploadModal from "./ui/UploadModal";
 import { useLocation } from "react-router-dom";
 import { useSessions } from "./hooks/useSessions";
+import { useModules } from "../../shared/hooks/useModules";
 /* ============================== SESSIONS ============================== */
 
 
 
-function Sessions({ modules, engagementId }) {
+function Sessions({ engagementId }) {
+  const modules = useModules(engagementId);
   const queryClient = useQueryClient();
-  const { sessions, setSessions } = useSessions(engagementId);
+  const { sessions, updateSessions, handleRealUpload, handleUploadComplete } = useSessions(engagementId);
+  const setSessions = updateSessions;
   const location = useLocation();
   const routeJumpTarget = location.state;
   const [selected, setSelected] = useState(null);
   const [loadingSelected, setLoadingSelected] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [flash, setFlash] = useState(null);
-  const handleRealUpload = async (data) => {
-    const { session } = data;
 
-    setSessions((prev) => [
-      ...prev,
-      {
-        ...session,
-        date: new Date().toISOString().slice(0, 10),
-        duration: "N/A",
-        attendees: ["Document Upload"],
-      },
-    ]);
-
-    try {
-      await queryClient.invalidateQueries({
-        queryKey: ["dashboard"],
-      });
-    } catch (err) {
-      console.error(err);
-    }
-  };
-  const handleUploadComplete = async () => {
-      try {
-        const res = await sessionsApi.uploadSession(engagementId);
-        if (res.alreadyUploaded) return true;
-
-        setSessions((prev) => [...prev, res.session]);
-
-        // Topics depth, activity feed, and headline stats live server-side —
-        // pull the authoritative versions rather than re-deriving them here.
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["dashboard"] }),
-          queryClient.invalidateQueries({ queryKey: ["coverage"] }),
-        ]);
-        return false;
-      } catch (err) {
-        console.error(err);
-        alert("Upload failed — is the backend running?");
-        return true;
-      }
-    };
 
   const openSession = async (id, segTimeToScrollTo) => {
     setLoadingSelected(true);

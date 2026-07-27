@@ -1,4 +1,4 @@
-import { apiRequest } from "../../shared/api/client";
+import { apiRequest, apiUpload } from "../../shared/api/client";
 
 export const sessionsApi = {
   getSessions: (engagementId) =>
@@ -22,4 +22,19 @@ export const sessionsApi = {
       method: "POST",
       body: JSON.stringify({ engagementId }),
     }),
+
+  uploadDocument: (file, engagementId) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("engagementId", engagementId);
+    return apiUpload("/documents/upload", fd);
+  },
+
+  uploadMedia: (file, engagementId) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("engagementId", engagementId);
+    return apiUpload("/media/upload", fd);
+  },
+
 };

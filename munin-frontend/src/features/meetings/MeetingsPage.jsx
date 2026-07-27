@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { meetingsApi } from "./api";
 import {
@@ -13,14 +13,10 @@ import {
   btnGhost,
 } from "../../shared/components/common";
 
-import {
-  api,
-  normalizeMeeting,
-  apiRequest,
-  invalidateEngagementScopedQueries,
-} from "../../shared/api/client";
+import { invalidateEngagementScopedQueries } from "../../shared/api/client";
 import { useMeetings } from "./hooks/useMeetings";
 import { useNavigate } from "react-router-dom";
+import { useModules } from "../../shared/hooks/useModules";
 /* ============================== MEETINGS ============================== */
 const MEETING_TERMINAL = new Set(["call_ended", "done", "error", "fatal"]);
 
@@ -40,7 +36,8 @@ function meetingStatusMeta(status) {
   return map[status] || { label: status || "Unknown", tone: "default" };
 }
 
-function Meetings({ configStatus, engagementId, modules }) {
+function Meetings({ configStatus, engagementId}) {
+  const modules = useModules(engagementId);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -52,66 +49,28 @@ function Meetings({ configStatus, engagementId, modules }) {
       },
     });
   };
-  const { meetings, setMeetings } = useMeetings(engagementId);
+  const { meetings, updateMeetings, handleJoin: joinMeetingHook, handleLeave: leaveMeetingHook } = useMeetings(engagementId);
+  const setMeetings = updateMeetings;
   const [url, setUrl] = useState("");
   const [botName, setBotName] = useState("Munin");
   const [meetingTitle, setMeetingTitle] = useState("");
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState(null);
   const [leavingId, setLeavingId] = useState(null);
-  const pollTimers = useRef({});
+  
 
   const inputStyle = { background: C.bgRaised, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 10px", fontSize: 13, fontFamily: FF.sans, width: "100%", boxSizing: "border-box" };
   const labelStyle = { display: "block", fontSize: 11.5, color: C.textFaint, marginBottom: 5 };
 
-  const schedulePoll = (id, delay = 4000) => {
-    clearTimeout(pollTimers.current[id]);
-    pollTimers.current[id] = setTimeout(() => pollMeeting(id), delay);
-  };
-
-  const pollMeeting = async (id) => {
-    const res = await meetingsApi.meetingStatus(id);
-    if (res.ok && res.data?.meeting) {
-      const merged = normalizeMeeting(res.data.meeting);
-      setMeetings((prev) => prev.map((m) => (m.id === id ? { ...m, ...merged, warning: res.data.warning || null } : m)));
-      if (merged.sessionId) {
-        queryClient.invalidateQueries({
-          queryKey: ["dashboard"],
-        });
-      }
-      if (!MEETING_TERMINAL.has(merged.status)) schedulePoll(id);
-    } else {
-      // Transient polling failure (backend hiccup, etc) — keep last-known
-      // state on screen and just try again shortly rather than erroring out.
-      schedulePoll(id, 6000);
-    }
-  };
-
-  useEffect(() => {
-    meetings.forEach((m) => {
-      if (!MEETING_TERMINAL.has(m.status) && !pollTimers.current[m.id]) schedulePoll(m.id, 3000);
-    });
-    return () => { Object.values(pollTimers.current).forEach(clearTimeout); pollTimers.current = {}; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const handleJoin = async (e) => {
     e.preventDefault();
     if (!url.trim() || joining) return;
-    if (!engagementId) {
-      setJoinError("No engagement selected.");
-      return;
-    }
     setJoining(true);
     setJoinError(null);
     try {
-      const res = await meetingsApi.joinMeeting(url.trim(), botName.trim() || "Munin", meetingTitle.trim(), engagementId);
-      const meeting = res.data?.meeting ? normalizeMeeting(res.data.meeting) : null;
-      if (meeting) {
-        setMeetings((prev) => [meeting, ...prev]);
-        if (res.ok) { setUrl(""); schedulePoll(meeting.id, 3000); }
-      }
-      if (!res.ok) setJoinError(res.data?.error || `Failed to send Munin to the meeting (${res.status}).`);
+      const result = await joinMeeting(url.trim(), botName.trim() || "Munin", meetingTitle.trim());
+      if (result.ok) setUrl("");
+      else setJoinError(result.error);
     } catch (err) {
       setJoinError(err.message || "Failed to send Munin to the meeting.");
     } finally {
@@ -121,18 +80,9 @@ function Meetings({ configStatus, engagementId, modules }) {
 
   const handleLeave = async (id) => {
     setLeavingId(id);
-    try {
-      const res = await meetingsApi.leaveMeeting(id);
-      if (res.ok && res.data?.meeting) {
-        setMeetings((prev) => prev.map((m) => (m.id === id ? { ...m, ...normalizeMeeting(res.data.meeting) } : m)));
-      } else if (!res.ok) {
-        alert(res.data?.error || `Couldn't remove Munin from the call (${res.status}).`);
-      }
-    } catch (err) {
-      alert(err.message || "Couldn't remove Munin from the call.");
-    } finally {
-      setLeavingId(null);
-    }
+    const result = await leaveMeeting(id);
+    if (!result.ok) alert(result.error);
+    setLeavingId(null);
   };
 
   return (
@@ -168,7 +118,7 @@ function Meetings({ configStatus, engagementId, modules }) {
         </Card>
 
         {meetings.length === 0 ? (
-          <div style={{ color: C.textFaint, fontSize: 13, padding: "8px 2px" }}>No meetings yet. Paste a meeting link above to send Munin in live.</div>
+          <div style={{ fontSize: 13, color: C.textFaint, padding: "20px 0" }}>No meetings yet — send Munin into a live call above to get started.</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {meetings.map((m, i) => {
@@ -201,7 +151,6 @@ function Meetings({ configStatus, engagementId, modules }) {
                         <div style={{ fontSize: 13.5, color: C.text, marginBottom: 2 }}>
                           {m.meetingTitle || m.botName}
                         </div>
-                     
 
                         <div
                           style={{
@@ -286,7 +235,7 @@ function Meetings({ configStatus, engagementId, modules }) {
                             onClick={async () => {
                               if (!window.confirm("Delete this meeting and all related data?")) return;
                               try {
-                                await apiRequest(`/meetings/${m.id}`, { method: "DELETE" });
+                                await meetingsApi.deleteMeeting(m.id);
                                 setMeetings((prev) => prev.filter((meeting) => meeting.id !== m.id));
                               } catch (err) {
                                 console.error(err);

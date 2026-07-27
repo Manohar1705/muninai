@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   C,
@@ -284,24 +285,18 @@ function NewEngagementView({ onCreated, onCancel }) {
 }
 
 function StarterPage({ onSelectEngagement }) {
-  const [engagements, setEngagements] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const queryClient = useQueryClient();
   const [view, setView] = useState("home"); // "home" | "create"
 
-  const load = () => {
-    setLoading(true);
-    setError(null);
-    engagementApi.engagements()
-      .then(setEngagements)
-      .catch((err) => {
-        console.error(err);
-        setError(err.message || "Failed to load engagements.");
-      })
-      .finally(() => setLoading(false));
-  };
-
-  useEffect(() => { load(); }, []);
+  const {
+    data: engagements = [],
+    isLoading: loading,
+    error,
+    refetch: load,
+  } = useQuery({
+    queryKey: ["engagements"],
+    queryFn: engagementApi.engagements,
+  });
 
   return (
     <div style={{ position: "relative", minHeight: "100vh", overflow: "hidden" }}>
@@ -311,7 +306,7 @@ function StarterPage({ onSelectEngagement }) {
           {view === "create" ? (
             <NewEngagementView
               onCreated={(created) => {
-                setEngagements((prev) => [created, ...prev]);
+                queryClient.setQueryData(["engagements"], (prev) => [created, ...(prev || [])]);
                 onSelectEngagement(created);
               }}
               onCancel={() => setView("home")}
@@ -341,7 +336,7 @@ function StarterPage({ onSelectEngagement }) {
               {loading && <div style={{ fontSize: 13, color: C.textFaint }}>Loading engagements…</div>}
               {error && (
                 <div style={{ fontSize: 13, color: C.red, marginBottom: 16 }}>
-                  {error} <button onClick={load} style={{ ...btnGhost, marginLeft: 10 }}>Retry</button>
+                  {error.message || "Failed to load engagements."} <button onClick={load} style={{ ...btnGhost, marginLeft: 10 }}>Retry</button>
                 </div>
               )}
 

@@ -11,28 +11,37 @@ import {
   btnGhost,
 } from "../../shared/components/common";
 
-import { api } from "../../shared/api/client";
+
 import ChatSidebar from "./ui/ChatSidebar";
 import { useQueryClient } from "@tanstack/react-query";
-import { chatApi } from "./api";
+import { useChat } from "./hooks/useChat";
 import { useNavigate } from "react-router-dom";
 /* ============================== ASK MUNIN (CHAT) ============================== */
 
-
- 
-
 const ACTIVE_CONVERSATION_KEY = "muninActiveConversationId";
 function AskMunin() {
-  const [conversations, setConversations] = useState([]);
-  
-  const [loadingConversations, setLoadingConversations] = useState(true);
+  const queryClient = useQueryClient();
   const [activeId, setActiveId] = useState(() => localStorage.getItem(ACTIVE_CONVERSATION_KEY) || null);
-  const [messages, setMessages] = useState([]);
-  const [loadingHistory, setLoadingHistory] = useState(true);
   const [input, setInput] = useState("");
-  const [sending, setSending] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const navigate = useNavigate();
+
+  const {
+    conversations,
+    loadingConversations,
+    messages,
+    loadingHistory,
+    setConversations,
+    setMessages,
+    refreshConversations,
+    sendMessage,
+    sending,
+    handleNewChat,
+    handleRenameChat,
+    handlePinChat,
+    handleArchiveChat,
+    handleDeleteChat,
+  } = useChat(activeId, setActiveId);
 
   const goToCitation = (citation) => {
     if (!citation || !citation.sessionId) return;
@@ -47,122 +56,14 @@ function AskMunin() {
   const endRef = useRef(null);
 
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
- 
-  const refreshConversations = () => {
-    return chatApi.listConversations()
-      .then((list) => {
-        setConversations(list);
-        return list;
-      })
-      .catch((err) => console.error(err))
-      .finally(() => setLoadingConversations(false));
-  };
- 
-  // On first mount: load the sidebar list, then decide which conversation
-  // to open — the one remembered in localStorage if it still exists,
-  // otherwise the most recent one, otherwise start a fresh empty chat.
-  useEffect(() => {
-    refreshConversations().then((list) => {
-      if (!list) return;
-      const remembered = localStorage.getItem(ACTIVE_CONVERSATION_KEY);
-      const stillExists = remembered && list.some((c) => c.id === remembered);
-      if (stillExists) {
-        setActiveId(remembered);
-      } else {
-        const firstActive = list.find((c) => !c.archived) || list[0];
-        if (firstActive) setActiveId(firstActive.id);
-        else{
-          setActiveId(null);
-          setLoadingHistory(false);
-        }
-      }
-    });
-  }, []);
- 
-  useEffect(() => {
-    if (activeId) localStorage.setItem(ACTIVE_CONVERSATION_KEY, activeId);
-  }, [activeId]);
- 
-  useEffect(() => {
-    if (!activeId) { setMessages([]); return; }
-    setLoadingHistory(true);
-    chatApi.chatHistory(activeId)
-      .then((history) => setMessages(history.map((m) => ({ role: m.role, text: m.text, citation: m.citation, isGap: m.isGap }))))
-      .catch((err) => console.error(err))
-      .finally(() => setLoadingHistory(false));
-  }, [activeId]);
- 
-  const handleNewChat = async () => {
-    try {
-      const conv = await chatApi.newConversation();
-      setConversations((list) => [conv, ...list]);
-      setActiveId(conv.id);
-      setMessages([]);
-    } catch (err) {
-      console.error(err);
-    }
-  };
- 
-  const handleRenameChat = async (id, title) => {
-    try {
-      await chatApi.renameConversation(id, title);
-      setConversations((list) => list.map((c) => (c.id === id ? { ...c, title } : c)));
-    } catch (err) {
-      console.error(err);
-      alert("Couldn't rename that chat — is the backend running?");
-    }
-  };
- 
-  const handlePinChat = async (id, pinned) => {
-    try {
-      await chatApi.pinConversation(id, pinned);
-      setConversations((list) => list.map((c) => (c.id === id ? { ...c, pinned } : c)));
-    } catch (err) {
-      console.error(err);
-      alert("Couldn't pin that chat — is the backend running?");
-    }
-  };
- 
-  const handleArchiveChat = async (id, archived) => {
-    try {
-      await chatApi.archiveConversation(id, archived);
-      setConversations((list) => list.map((c) => (c.id === id ? { ...c, archived } : c)));
-    } catch (err) {
-      console.error(err);
-      alert("Couldn't archive that chat — is the backend running?");
-    }
-  };
- 
-  const handleDeleteChat = async (id) => {
-    if (!confirm("Delete this chat? This can't be undone.")) return;
-    try {
-      await chatApi.deleteConversation(id);
-      const remaining = conversations.filter((c) => c.id !== id);
-      setConversations(remaining);
-      if (id === activeId) {
-        const nextActive = remaining.find((c) => !c.archived);
-        if (nextActive) {
-          setActiveId(nextActive.id);
-        } else {
-          setActiveId(null);
-          setMessages([]);
-          localStorage.removeItem(ACTIVE_CONVERSATION_KEY);
-        }
-      }
-    } catch (err) {
-      console.error(err);
-      alert("Couldn't delete that chat — is the backend running?");
-    }
-  };
- 
+
   const send = async () => {
     const q = input.trim();
     if (!q || sending) return;
     setInput("");
-    setSending(true);
     setMessages((m) => [...m, { role: "user", text: q }]);
     try {
-      const res = await chatApi.chat(q, activeId);
+      const res = await sendMessage(q);
       if (res.conversationId && res.conversationId !== activeId) setActiveId(res.conversationId);
       setMessages((m) => [...m, { role: "assistant", text: res.reply, citation: res.citation, isGap: res.isGap }]);
       if (res.isGap) {
@@ -174,11 +75,9 @@ function AskMunin() {
     } catch (err) {
       console.error(err);
       setMessages((m) => [...m, { role: "assistant", text: "Sorry — I couldn't reach the backend to answer that. Is it running?", citation: null, isGap: false }]);
-    } finally {
-      setSending(false);
     }
   };
- 
+
   return (
     <div style={{ padding: "26px 32px 32px", display: "flex", height: "calc(100vh - 130px)" }}>
       <ChatSidebar
@@ -198,7 +97,7 @@ function AskMunin() {
         <Section title="Ask Munin" style={{ marginBottom: 12 }}>
           <div style={{ fontSize: 12.5, color: C.textFaint }}>Answers are grounded in the knowledge base and always cite a source. Anything uncovered is logged as a gap automatically.</div>
         </Section>
- 
+
         <Card style={{ flex: 1, padding: "18px 20px", display: "flex", flexDirection: "column", minHeight: 0 }}>
           <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}>
             {loadingHistory && <div style={{ fontSize: 12.5, color: C.textFaint }}>Loading conversation…</div>}
@@ -227,7 +126,7 @@ function AskMunin() {
             ))}
             <div ref={endRef} />
           </div>
- 
+
           <div style={{ display: "flex", gap: 8, marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
             <input
               value={input}

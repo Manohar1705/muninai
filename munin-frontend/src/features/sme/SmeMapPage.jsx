@@ -8,10 +8,11 @@ import {
   Section,
   Card,
 } from "../../shared/components/common";
-
+import { useSmeMap } from "./hooks/useSmeMap";
  
 /* ============================== SME MAP ============================== */
-function SMEMap({ sme, keyPersonRisk }) {
+function SMEMap({ engagementId }) {
+  const { sme, keyPersonRisk } = useSmeMap(engagementId);
   return (
     <div style={{ padding: "26px 32px 48px" }}>
       <Section title="SME contribution map">
