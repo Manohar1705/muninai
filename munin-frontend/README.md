@@ -1,8 +1,9 @@
 # Munin — frontend
 
 The agent that remembers everything. This is the React frontend for the
-Munin demo, wired to the `munin-backend` API — no more client-side seed
-data or simulated chat matching.
+Munin platform, wired to the `munin-backend` API — no client-side seed data
+or simulated logic; every screen fetches, mutates, and caches through the
+real backend.
 
 ## Run it
 
@@ -12,7 +13,7 @@ This needs the backend running first (see `../munin-backend/README.md`):
 cd ../munin-backend
 npm install
 cp .env.example .env
-npm start          # http://localhost:4000
+npm run dev        # http://localhost:4000
 ```
 
 Then, in this folder:
@@ -22,51 +23,94 @@ npm install
 npm run dev
 ```
 
-Open the URL Vite prints (usually http://localhost:5173). On load the app
-fetches the dashboard, sessions, knowledge base, coverage, and SME map from
-the backend — if it can't reach it, you'll see a "Couldn't reach the Munin
-backend" screen with a Retry button instead of a blank/broken UI.
+Open the URL Vite prints (usually http://localhost:5173).
 
 If the backend isn't running on `http://localhost:4000`, copy `.env.example`
-to `.env` and set `VITE_API_BASE` accordingly.
+to `.env` and set `VITE_API_BASE` accordingly:
 
-## What's in here
+```env
+VITE_API_BASE=http://localhost:4000/api
+```
 
-- `src/App.jsx` — the entire app: design tokens, the API client, and all six
-  pages (Dashboard, Sessions, Knowledge Base, Coverage, SME Map, Ask Munin).
-- `src/main.jsx` — mounts the app.
-- `src/index.css` — minimal global reset.
+## Architecture
+
+The app is organized as **feature-based modules**, not one large file. Each
+feature owns its own API calls, hooks, and UI — nothing is scattered across
+a single monolithic component.
+
+```text
+src/
+  app/
+    App.jsx              Route table + layout shell (Sidebar, header, config banner)
+  main.jsx                Mounts React, BrowserRouter, and the React Query client
+  shared/
+    api/client.js         Generic fetch wrapper (apiRequest, apiRequestSoft, apiUpload)
+    components/           Sidebar, EngagementHeader, shared UI kit (common.jsx)
+    constants/             Shared constants
+    hooks/                 Cross-cutting hooks (config status, current engagement, modules, open-gaps count)
+  features/
+    dashboard/             Dashboard page, api, hooks, UI
+    sessions/               Sessions list/detail, upload flow, api, hooks, UI
+    meetings/                Live meeting bot join/status/leave, api, hooks
+    knowledge/               Knowledge Base search/filter, api, hooks
+    coverage/                 Coverage topics/gaps, api, hooks
+    sme/                       SME contribution map, api, hooks
+    chat/                       Ask Munin, conversations, citations, api, hooks, UI
+    engagement/                 Engagement setup (modules, planned sessions), api, hooks, UI
+    starter/                     Engagement selector (landing page before an engagement is chosen)
+```
+
+Each feature folder follows the same shape:
+
+```text
+features/<name>/
+  <Name>Page.jsx       The page component — the only thing other code should import
+  api.js                Thin wrapper functions around shared/api/client, scoped to this feature
+  hooks/                 useX() hooks that own this feature's state, queries, and mutations
+  ui/                     Feature-local presentational components (rows, modals, charts)
+```
+
+Rule of thumb: deleting a `features/<x>/` folder and its route should be the
+only cleanup needed to remove that feature — no other file should reach
+into its internals.
 
 ## How it's wired to the backend
 
-- All list/detail data (dashboard stats, sessions, knowledge objects,
-  coverage/gaps, SME map) is fetched from `/api/...` on mount via a small
-  `api` client at the top of `App.jsx`.
-- **Sessions**: the list view shows lightweight session rows; clicking one
-  (or following a "View in transcript" link from the Knowledge Base) fetches
-  the full session — including transcript and extracted knowledge objects —
-  from `GET /api/sessions/:id`.
-- **Upload flow**: the animated "Transcribing → Extracting → Indexing" UI
-  still runs client-side for the visual moment, then calls
-  `POST /api/sessions/upload` when it finishes and merges the real response
-  (new session, knowledge objects, updated readiness, closed gap) into
-  state.
-- **Ask Munin**: chat history loads from `GET /api/chat/history`; sending a
-  message calls `POST /api/chat` and renders the real `reply` / `citation` /
-  `isGap`. If a gap gets logged, Coverage data is refreshed in the
-  background so the gap count updates without a page reload.
-- **Reset demo data**: the sidebar's "Reset demo data" control calls
-  `POST /api/settings/reset`, then refetches everything — this is what makes
-  the full demo (including the upload "wow moment") repeatable.
-
-## Known limitations (by design, for now)
-
-- No auth beyond the backend's fake click-through SSO endpoint — this app
-  doesn't call it or gate any pages behind it, since it's a single-user demo.
-- No optimistic UI / retry queue for failed writes (upload, chat, reset) —
-  failures show a plain `alert()` for now.
+- **Routing** — `react-router-dom`. `app/App.jsx` defines the route table;
+  `shared/components/Sidebar.jsx` derives the active nav item from
+  `useLocation()` and navigates with `useNavigate()` (no separate "page"
+  state to keep in sync).
+- **Server state** — `@tanstack/react-query`. Each feature's hook
+  (`useSessions`, `useMeetings`, `useCoverage`, `useDashboard`, etc.) owns
+  its own `useQuery`, and mutations invalidate the relevant query keys
+  directly (e.g. uploading a session invalidates `dashboard` and
+  `coverage` so both screens update without a manual refresh or a prop
+  passed down from a parent).
+- **Cross-feature navigation** — where one feature needs to jump into
+  another (e.g. a Knowledge Base result linking to its source transcript
+  in Sessions), it uses router state:
+  `navigate("/sessions", { state: { sessionId, segTime } })`, and the
+  destination reads `useLocation().state` — not a shared top-level
+  variable threaded through the app shell.
+- **Current engagement** — `currentEngagementId` lives in
+  `shared/hooks/useCurrentEngagement.js` (persisted to `localStorage`),
+  owned by `App.jsx`, and passed down to features that need it
+  (`Dashboard`, `Sessions`, `Meetings`, `SME Map`, `Engagement Setup`).
+  This one prop is intentional — it's genuine app-level context, not
+  feature-owned data.
+- **Upload flow** — `features/sessions/ui/UploadModal.jsx` calls
+  `sessionsApi.uploadDocument` / `sessionsApi.uploadMedia`
+  (`POST /api/documents/upload`, `POST /api/media/upload`); on success the
+  new session and its knowledge objects merge into the Sessions query
+  cache and `dashboard`/`coverage` are invalidated.
+- **Ask Munin** — `features/chat` loads conversation history via
+  `GET /api/chat/history`, sends messages via `POST /api/chat`, and
+  renders the real `reply` / `citation` / `isGap` response. A logged gap
+  triggers a `coverage` cache invalidation so the gap count (including the
+  Sidebar badge) updates without a page reload.
 
 ## Next steps
 
-Verification (click through all six pages end-to-end, including a gap-
-logging chat question, the upload flow, and reset), then push to GitHub.
+Verification: click through every page (Dashboard, Sessions, Meetings, KB,
+Coverage, SME Map, Ask Munin, Engagement Setup), including the upload flow
+and a gap-logging chat question, then push.
