@@ -68,7 +68,7 @@ function Meetings({ configStatus, engagementId}) {
     setJoining(true);
     setJoinError(null);
     try {
-      const result = await joinMeeting(url.trim(), botName.trim() || "Munin", meetingTitle.trim());
+      const result = await joinMeetingHook(url.trim(), botName.trim() || "Munin", meetingTitle.trim());
       if (result.ok) setUrl("");
       else setJoinError(result.error);
     } catch (err) {
@@ -80,7 +80,7 @@ function Meetings({ configStatus, engagementId}) {
 
   const handleLeave = async (id) => {
     setLeavingId(id);
-    const result = await leaveMeeting(id);
+    const result = await leaveMeetingHook(id);
     if (!result.ok) alert(result.error);
     setLeavingId(null);
   };

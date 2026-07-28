@@ -186,7 +186,7 @@ function NewEngagementTile({ onClick, index }) {
 
 function NewEngagementView({ onCreated, onCancel }) {
   const [name, setName] = useState("");
-  const [phase, setPhase] = useState(PHASES[0]);
+  const phase = PHASES[0];
   const [details, setDetails] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -257,12 +257,6 @@ function NewEngagementView({ onCreated, onCancel }) {
         <div>
           <div style={{ fontSize: 11.5, color: C.textFaint, marginBottom: 6 }}>Engagement name</div>
           <input autoFocus placeholder="e.g. Nova Payments Platform" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
-        </div>
-        <div>
-          <div style={{ fontSize: 11.5, color: C.textFaint, marginBottom: 6 }}>Phase</div>
-          <select value={phase} onChange={(e) => setPhase(e.target.value)} style={inputStyle}>
-            {PHASES.map((p) => <option key={p} value={p}>{p}</option>)}
-          </select>
         </div>
         <div>
           <div style={{ fontSize: 11.5, color: C.textFaint, marginBottom: 6 }}>Details (optional)</div>
