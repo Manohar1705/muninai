@@ -27,7 +27,7 @@ const updateMeetingError = db.prepare(
 );
 const getMeeting = db.prepare(`SELECT * FROM meetings WHERE id = ?`);
 const getMeetingByBotId = db.prepare(`SELECT * FROM meetings WHERE bot_id = ?`);
-const insertActivity = db.prepare(`INSERT INTO activity (text, created_at) VALUES (@text, @created_at)`);
+const insertActivity = db.prepare(`INSERT INTO activity (text, created_at, engagement_id) VALUES (@text, @created_at, @engagement_id)`);
 const insertChunk = db.prepare(
   `INSERT INTO meeting_transcript_chunks (bot_id, seq, speaker, text, timestamp) VALUES (@bot_id, @seq, @speaker, @text, @timestamp)`
 );
@@ -149,6 +149,7 @@ router.post("/join", async (req, res) => {
     insertActivity.run({
       text: `Munin was sent to join a meeting (${resolvedBotName}).`,
       created_at: now,
+      engagement_id: Number(engagementId),
     });
 
     return res.json({
@@ -327,6 +328,7 @@ router.post("/webhook", (req, res) => {
         insertActivity.run({
           text: `${name} ${action} the meeting Munin is in (${meeting.bot_name}).`,
           created_at: new Date().toISOString(),
+          engagement_id: meeting.engagement_id,
         });
       }
     }
@@ -359,6 +361,7 @@ router.post("/:id/leave", async (req, res) => {
     insertActivity.run({
       text: `Munin left the meeting (${meeting.bot_name}).`,
       created_at: new Date().toISOString(),
+      engagement_id: meeting.engagement_id,
     });
     try {
       await processMeetingChunks(meeting.id, { finalize: true });

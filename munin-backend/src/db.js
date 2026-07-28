@@ -201,7 +201,7 @@ function seedIfEmpty() {
     `INSERT INTO readiness (module, score) VALUES (@module, @score)`
   );
   const insertActivity = db.prepare(
-    `INSERT INTO activity (text, created_at) VALUES (@text, @created_at)`
+    `INSERT INTO activity (text, created_at, engagement_id) VALUES (@text, @created_at, @engagement_id)`
   );
   const insertChat = db.prepare(
     `INSERT INTO chat_messages (role, text, citation, citation_session_id, citation_timestamp, is_gap, conversation_id) VALUES (@role, @text, @citation, @citation_session_id, @citation_timestamp, @is_gap, @conversation_id)`
@@ -307,7 +307,7 @@ function seedIfEmpty() {
     }
 
     if (tableIsEmpty("activity")) {
-      for (const a of ACTIVITY_SEED) insertActivity.run({ text: a.text, created_at: a.createdAt });
+      for (const a of ACTIVITY_SEED) insertActivity.run({ text: a.text, created_at: a.createdAt, engagement_id: seedEngagementId  });
     }
 
     if (tableIsEmpty("conversations")) {
@@ -435,6 +435,9 @@ function migrateSchema() {
   if (!conversationCols.includes("archived")) {
     db.exec(`ALTER TABLE conversations ADD COLUMN archived INTEGER NOT NULL DEFAULT 0`);
   }
+  if (!conversationCols.includes("engagement_id")) {
+    db.exec(`ALTER TABLE conversations ADD COLUMN engagement_id INTEGER REFERENCES engagements(id) ON DELETE CASCADE`);
+  }
   const meetingCols4 = db.prepare(
     `PRAGMA table_info(meetings)`
   ).all().map((c) => c.name);
@@ -486,6 +489,11 @@ function migrateSchema() {
   const meetingCols5 = db.prepare(`PRAGMA table_info(meetings)`).all().map((c) => c.name);
   if (!meetingCols5.includes("engagement_id")) {
     db.exec(`ALTER TABLE meetings ADD COLUMN engagement_id INTEGER REFERENCES engagements(id) ON DELETE CASCADE`);
+  }
+
+  const activityCols = db.prepare(`PRAGMA table_info(activity)`).all().map((c) => c.name);
+  if (!activityCols.includes("engagement_id")) {
+    db.exec(`ALTER TABLE activity ADD COLUMN engagement_id INTEGER REFERENCES engagements(id) ON DELETE CASCADE`);
   }
 
   if (!moduleColsForEngagement.includes("engagement_id")) {

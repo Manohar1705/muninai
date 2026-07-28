@@ -8,8 +8,13 @@ const router = express.Router();
 
 const NOT_COVERED_TEXT = "This hasn't been covered in KT yet — I've logged it as a gap.";
 
-function loadKnowledgeObjects() {
-  return db.prepare(`SELECT * FROM knowledge_objects`).all().map((k) => ({
+function loadKnowledgeObjects(engagementId) {
+  const rows = db.prepare(`
+    SELECT ko.* FROM knowledge_objects ko
+    JOIN sessions s ON s.id = ko.session_id
+    WHERE s.engagement_id = ?
+  `).all(engagementId);
+  return rows.map((k) => ({
     id: k.id, title: k.title, type: k.type, module: k.module,
     description: k.description, confidence: k.confidence,
     needsReview: !!k.needs_review, source: k.source,
@@ -17,16 +22,17 @@ function loadKnowledgeObjects() {
   }));
 }
 
-function loadTranscriptSegments() {
+function loadTranscriptSegments(engagementId) {
   const rows = db
     .prepare(
       `SELECT ts.id AS segId, ts.session_id AS sessionId, ts.timestamp AS timestamp, ts.speaker AS speaker,
               ts.text AS text, s.title AS sessionTitle, s.num AS sessionNum, s.module AS module,
               s.source_type AS sourceType
        FROM transcript_segments ts
-       JOIN sessions s ON s.id = ts.session_id`
+       JOIN sessions s ON s.id = ts.session_id
+       WHERE s.engagement_id = ?`
     )
-    .all();
+    .all(engagementId);
  
   return rows.map((r) => ({
     id: `seg-${r.segId}`,
@@ -83,7 +89,7 @@ function getConversationStats(conversationId) {
   };
 }
 
-function buildDatabaseContext() {
+function buildDatabaseContext(engagementId) {
   const sessionSummary = db
     .prepare(`
       SELECT
@@ -91,10 +97,11 @@ function buildDatabaseContext() {
         title,
         module
       FROM sessions
+      WHERE engagement_id = ?
       ORDER BY id DESC
       LIMIT 20
     `)
-    .all();
+    .all(engagementId);
   
   const recentGaps = db
   .prepare(`
@@ -110,7 +117,7 @@ function buildDatabaseContext() {
 
 
   const meetingCount =
-    db.prepare(`SELECT COUNT(*) AS c FROM meetings`).get().c;
+    db.prepare(`SELECT COUNT(*) AS c FROM meetings WHERE engagement_id = ?`).get(engagementId).c;
 
   const openGapCount =
     db.prepare(
@@ -134,9 +141,9 @@ function buildDatabaseContext() {
   .prepare(`
     SELECT name, phase
     FROM engagements
-    LIMIT 1
+    WHERE id = ?
   `)
-  .get();
+  .get(engagementId);
 
   const readinessDetails = db
   .prepare(`
@@ -179,10 +186,11 @@ function buildDatabaseContext() {
       meeting_title,
       status
     FROM meetings
+    WHERE engagement_id = ?
     ORDER BY created_at DESC
     LIMIT 20
   `)
-  .all();
+  .all(engagementId);
 
   const readinessSummary = db
   .prepare(`
@@ -192,7 +200,7 @@ function buildDatabaseContext() {
   `)
   .all();
 
-  const sessionCount = db.prepare(`SELECT COUNT(*) AS c FROM sessions`).get().c;
+  const sessionCount = db.prepare(`SELECT COUNT(*) AS c FROM sessions WHERE engagement_id = ?`).get(engagementId).c;
   return {
     sessionCount,
     meetingCount,
@@ -217,19 +225,21 @@ function buildDatabaseContext() {
       .prepare(`
         SELECT title, module, date
         FROM sessions
+        WHERE engagement_id = ?
         ORDER BY num DESC
         LIMIT 10
       `)
-      .all(),
+      .all(engagementId),
 
     recentMeetings: db
       .prepare(`
         SELECT meeting_title, status
         FROM meetings
+        WHERE engagement_id = ?
         ORDER BY created_at DESC
         LIMIT 10
       `)
-      .all(),
+      .all(engagementId),
   };
   
 }
@@ -408,13 +418,17 @@ function saveMessage(conversationId, role, text, citation, isGap) {
   db.prepare(`UPDATE conversations SET updated_at = datetime('now') WHERE id = ?`).run(conversationId);
 }
  
-function ensureConversation(conversationId) {
+function ensureConversation(conversationId, engagementId) {
   if (conversationId) {
     const existing = db.prepare(`SELECT id FROM conversations WHERE id = ?`).get(conversationId);
     if (existing) return conversationId;
   }
   const id = `conv-${nanoid(8)}`;
-  db.prepare(`INSERT INTO conversations (id, title) VALUES (?, ?)`).run(id, "New chat");
+  db.prepare(`INSERT INTO conversations (id, title, engagement_id) VALUES (?, ?, ?)`).run(
+    id,
+    "New chat",
+    engagementId ? Number(engagementId) : null
+  );
   return id;
 }
  
@@ -426,23 +440,30 @@ function maybeTitleConversation(conversationId, firstMessage) {
   }
 }
 
-// GET /api/chat/conversations
+// GET /api/chat/conversations?engagementId=123
 router.get("/conversations", (req, res) => {
+  const { engagementId } = req.query;
   const rows = db.prepare(`
     SELECT c.id, c.title, c.pinned AS pinned, c.archived AS archived,
       c.created_at AS createdAt, c.updated_at AS updatedAt,
       (SELECT text FROM chat_messages WHERE conversation_id = c.id ORDER BY id DESC LIMIT 1) AS lastMessage
     FROM conversations c
+    WHERE c.engagement_id IS ?
     ORDER BY c.pinned DESC, c.updated_at DESC
-  `).all();
+  `).all(engagementId ? Number(engagementId) : null);
   res.json(rows.map((r) => ({ ...r, pinned: !!r.pinned, archived: !!r.archived })));
 });
  
 router.post("/conversations", (req, res) => {
+  const { engagementId } = req.body || {};
   const id = `conv-${nanoid(8)}`;
   const now = new Date().toISOString();
-  db.prepare(`INSERT INTO conversations (id, title) VALUES (?, ?)`).run(id, "New chat");
-  res.json({ id, title: "New chat", pinned: false, archived: false, createdAt: now, updatedAt: now, lastMessage: null });
+  db.prepare(`INSERT INTO conversations (id, title, engagement_id) VALUES (?, ?, ?)`).run(
+    id,
+    "New chat",
+    engagementId ? Number(engagementId) : null
+  );
+  res.json({ id, title: "New chat", pinned: false, archived: false, createdAt: now, updatedAt: now, lastMessage: null, engagementId: engagementId ? Number(engagementId) : null });
 });
  
 // PATCH /api/chat/conversations/:id  { title }
@@ -513,11 +534,11 @@ router.get("/history", (req, res) => {
 // POST /api/chat  { message: string }
 router.post("/", async (req, res) => {
   
-  const { message, conversationId: incomingId } = req.body || {};
+  const { message, conversationId: incomingId, engagementId } = req.body || {};
   if (!message || !String(message).trim()) {
     return res.status(400).json({ error: "message is required" });
   }
-  const conversationId = ensureConversation(incomingId);
+  const conversationId = ensureConversation(incomingId, engagementId);
   maybeTitleConversation(conversationId, message);
   saveMessage(conversationId, "user", message, null, false);
   const dbAnswer = tryDatabaseQuery(message);
@@ -540,8 +561,8 @@ router.post("/", async (req, res) => {
       usedLlm: false
     });
   }
-  const knowledgeObjects = loadKnowledgeObjects();
-  const transcriptSegments = loadTranscriptSegments();
+  const knowledgeObjects = loadKnowledgeObjects(engagementId);
+  const transcriptSegments = loadTranscriptSegments(engagementId);
   const candidates = [...knowledgeObjects, ...transcriptSegments];
  
   let reply;
@@ -557,7 +578,7 @@ router.post("/", async (req, res) => {
       const history = getRecentHistory(conversationId);
       
 
-      const dbContext = buildDatabaseContext();
+      const dbContext = buildDatabaseContext(engagementId);
       // let dbContext = {};
 
       // try {

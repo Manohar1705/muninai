@@ -2,19 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { chatApi } from "../api";
 
-const ACTIVE_CONVERSATION_KEY = "muninActiveConversationId";
 
-export function useChat(activeId, setActiveId) {
+
+export function useChat(activeId, setActiveId, engagementId) {
   const queryClient = useQueryClient();
   const didPickInitial = useRef(false);
   const [sending, setSending] = useState(false);
-
+  const activeConversationKey = `muninActiveConversationId:${engagementId || "none"}`;
   const {
     data: conversations = [],
     isLoading: loadingConversations,
   } = useQuery({
-    queryKey: ["chat-conversations"],
-    queryFn: chatApi.listConversations,
+    queryKey: ["chat-conversations", engagementId],
+    queryFn: () => chatApi.listConversations(engagementId),
   });
 
   const {
@@ -37,6 +37,10 @@ export function useChat(activeId, setActiveId) {
 
   const loadingHistory = !!activeId && loadingHistoryQuery;
 
+  // Re-run the "pick initial conversation" logic whenever the engagement changes
+  useEffect(() => {
+    didPickInitial.current = false;
+  }, [engagementId]);
   // Runs once, the first time the conversation list arrives — picks the
   // remembered conversation (if it still exists), else the most recent
   // non-archived one, else leaves it empty.
@@ -45,7 +49,7 @@ export function useChat(activeId, setActiveId) {
     if (loadingConversations) return;
     didPickInitial.current = true;
 
-    const remembered = localStorage.getItem(ACTIVE_CONVERSATION_KEY);
+    const remembered = localStorage.getItem(activeConversationKey);
     const stillExists = remembered && conversations.some((c) => c.id === remembered);
     if (stillExists) {
       setActiveId(remembered);
@@ -56,11 +60,11 @@ export function useChat(activeId, setActiveId) {
   }, [loadingConversations, conversations, setActiveId]);
 
   useEffect(() => {
-    if (activeId) localStorage.setItem(ACTIVE_CONVERSATION_KEY, activeId);
-  }, [activeId]);
+    if (activeId) localStorage.setItem(activeConversationKey, activeId);
+  }, [activeId, activeConversationKey]);
 
   const setConversations = (updater) =>
-    queryClient.setQueryData(["chat-conversations"], (prev) => updater(prev || []));
+    queryClient.setQueryData(["chat-conversations", engagementId], (prev) => updater(prev || []));
 
   const setMessages = (updater) =>
     queryClient.setQueryData(["chat-history", activeId], (prev) => updater(prev || []));
@@ -71,7 +75,7 @@ export function useChat(activeId, setActiveId) {
   async function sendMessage(text) {
     setSending(true);
     try {
-      const res = await chatApi.chat(text, activeId);
+      const res = await chatApi.chat(text, activeId, engagementId);
       return res;
     } finally {
       setSending(false);
@@ -80,7 +84,7 @@ export function useChat(activeId, setActiveId) {
 
   const handleNewChat = async () => {
     try {
-      const conv = await chatApi.newConversation();
+      const conv = await chatApi.newConversation(engagementId);
       setConversations((list) => [conv, ...list]);
       setActiveId(conv.id);
     } catch (err) {
@@ -130,7 +134,7 @@ export function useChat(activeId, setActiveId) {
           setActiveId(nextActive.id);
         } else {
           setActiveId(null);
-          localStorage.removeItem(ACTIVE_CONVERSATION_KEY);
+          localStorage.removeItem(activeConversationKey);
         }
       }
     } catch (err) {

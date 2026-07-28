@@ -126,7 +126,6 @@ function EngagementCard({ engagement, index, onSelect }) {
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 14.5, fontWeight: 500, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{engagement.name}</div>
-            <div style={{ fontSize: 11.5, color: C.textFaint, marginTop: 1 }}>{engagement.phase}</div>
           </div>
         </div>
 

@@ -126,7 +126,7 @@ const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
 
           <Route
             path="/kb"
-            element={<KnowledgeBase />}
+            element={<KnowledgeBase engagementId={currentEngagementId} />}
           />
 
           {/* <Route
@@ -149,6 +149,7 @@ const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
             path="/chat"
             element={      
               <AskMunin
+                engagementId={currentEngagementId}
               />
             }
           />

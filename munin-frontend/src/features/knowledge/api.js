@@ -1,6 +1,6 @@
 import { apiRequest } from "../../shared/api/client";
 
 export const knowledgeApi = {
-  getKnowledgeObjects: () =>
-    apiRequest("/knowledge-objects"),
+  getKnowledgeObjects: (engagementId) =>
+    apiRequest(`/knowledge-objects?engagementId=${encodeURIComponent(engagementId || "")}`),
 };

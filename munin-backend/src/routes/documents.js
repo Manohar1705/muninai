@@ -105,7 +105,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       `INSERT INTO knowledge_objects (id, title, type, module, description, confidence, needs_review, source, session_id, segment_timestamp, speaker)
        VALUES (@id, @title, @type, @module, @description, @confidence, @needs_review, @source, @session_id, @segment_timestamp, @speaker)`
     );
-    const insertActivity = db.prepare(`INSERT INTO activity (text, created_at) VALUES (@text, @created_at)`);
+    const insertActivity = db.prepare(`INSERT INTO activity (text, created_at, engagement_id) VALUES (@text, @created_at, @engagement_id)`);
 
     const nextNumRow = db.prepare(`SELECT COALESCE(MAX(num), 0) + 1 AS n FROM sessions`).get();
 
@@ -149,6 +149,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       insertActivity.run({
         text: `Document "${req.file.originalname}" processed — ${knowledgeObjects.length} knowledge object(s) extracted.`,
         created_at: now.toISOString(),
+        engagement_id: engagementId,
       });
     });
     tx();

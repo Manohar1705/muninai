@@ -18,13 +18,18 @@ import { useChat } from "./hooks/useChat";
 import { useNavigate } from "react-router-dom";
 /* ============================== ASK MUNIN (CHAT) ============================== */
 
-const ACTIVE_CONVERSATION_KEY = "muninActiveConversationId";
-function AskMunin() {
+function AskMunin({ engagementId }) {
   const queryClient = useQueryClient();
-  const [activeId, setActiveId] = useState(() => localStorage.getItem(ACTIVE_CONVERSATION_KEY) || null);
+  const activeConversationKey = `muninActiveConversationId:${engagementId || "none"}`;
+  const [activeId, setActiveId] = useState(() => localStorage.getItem(activeConversationKey) || null);
   const [input, setInput] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const navigate = useNavigate();
+
+  // Reset the active conversation when the engagement changes
+  useEffect(() => {
+    setActiveId(localStorage.getItem(activeConversationKey) || null);
+  }, [engagementId]);
 
   const {
     conversations,
@@ -41,7 +46,7 @@ function AskMunin() {
     handlePinChat,
     handleArchiveChat,
     handleDeleteChat,
-  } = useChat(activeId, setActiveId);
+  } = useChat(activeId, setActiveId, engagementId);
 
   const goToCitation = (citation) => {
     if (!citation || !citation.sessionId) return;

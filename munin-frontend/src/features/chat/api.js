@@ -1,12 +1,17 @@
 import { apiRequest } from "../../shared/api/client";
 
 export const chatApi = {
-  listConversations: () =>
-    apiRequest("/chat/conversations"),
+  listConversations: (engagementId) =>
+    apiRequest(
+      `/chat/conversations${
+        engagementId ? `?engagementId=${encodeURIComponent(engagementId)}` : ""
+      }`
+    ),
 
-  newConversation: () =>
+  newConversation: (engagementId) =>
     apiRequest("/chat/conversations", {
       method: "POST",
+      body: JSON.stringify({ engagementId }),
     }),
 
   renameConversation: (id, title) =>
@@ -39,12 +44,13 @@ export const chatApi = {
       )}`
     ),
 
-  chat: (message, conversationId) =>
+  chat: (message, conversationId, engagementId) =>
     apiRequest("/chat", {
       method: "POST",
       body: JSON.stringify({
         message,
         conversationId,
+        engagementId,
       }),
     }),
 };

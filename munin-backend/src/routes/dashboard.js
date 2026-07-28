@@ -35,8 +35,8 @@ router.get("/", (req, res) => {
     : 0;
 
   const activity = db
-    .prepare(`SELECT text, created_at AS createdAt FROM activity ORDER BY id DESC LIMIT 12`)
-    .all();
+    .prepare(`SELECT text, created_at AS createdAt FROM activity WHERE engagement_id = ? ORDER BY id DESC LIMIT 12`)
+    .all(engagementId);
 
   res.json({
     stats: {

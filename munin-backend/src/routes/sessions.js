@@ -71,7 +71,7 @@ router.post("/upload", (req, res) => {
     `INSERT INTO knowledge_objects (id, title, type, module, description, confidence, needs_review, source, session_id, segment_timestamp)
      VALUES (@id, @title, @type, @module, @description, @confidence, @needs_review, @source, @session_id, @segment_timestamp)`
   );
-  const insertActivity = db.prepare(`INSERT INTO activity (text, created_at) VALUES (@text, @created_at)`);
+  const insertActivity = db.prepare(`INSERT INTO activity (text, created_at, engagement_id) VALUES (@text, @created_at, @engagement_id)`);
 
   const newKOs = KNOWLEDGE_OBJECTS_SEED.filter((k) => k.source.startsWith("KT Session 9"));
 
@@ -108,9 +108,9 @@ router.post("/upload", (req, res) => {
     db.prepare(`UPDATE readiness SET score = ? WHERE module = 'Customer Notifications'`).run(nextScore);
 
     const now = new Date().toISOString();
-    insertActivity.run({ text: "KT Session 9 — Notification Gateway Failover & DR processed, 4 knowledge objects extracted.", created_at: now });
-    insertActivity.run({ text: "Gap closed: notification gateway failover procedure.", created_at: now });
-    insertActivity.run({ text: `Readiness recalculated for Customer Notifications (${nextScore}%).`, created_at: now });
+    insertActivity.run({ text: "KT Session 9 — Notification Gateway Failover & DR processed, 4 knowledge objects extracted.", created_at: now, engagement_id: engagementId });
+    insertActivity.run({ text: "Gap closed: notification gateway failover procedure.", created_at: now, engagement_id: engagementId });
+    insertActivity.run({ text: `Readiness recalculated for Customer Notifications (${nextScore}%).`, created_at: now, engagement_id: engagementId });
 
     db.prepare(`INSERT OR REPLACE INTO app_state (key, value) VALUES ('session9_uploaded', 'true')`).run();
   });

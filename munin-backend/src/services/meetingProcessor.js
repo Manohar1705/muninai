@@ -62,7 +62,7 @@ function resolveSessionTitle(meeting) {
 }
 
 const getMeetingById = db.prepare(`SELECT * FROM meetings WHERE id = ?`);
-const insertActivity = db.prepare(`INSERT INTO activity (text, created_at) VALUES (@text, @created_at)`);
+const insertActivity = db.prepare(`INSERT INTO activity (text, created_at, engagement_id) VALUES (@text, @created_at, @engagement_id)`);
 const insertSession = db.prepare(
   `INSERT INTO sessions (id, num, module, title, date, duration, status, attendees, source_type, engagement_id)
    VALUES (@id, @num, @module, @title, @date, @duration, @status, @attendees, @source_type, @engagement_id)`
@@ -108,12 +108,14 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
       insertActivity.run({
         text: `Munin's meeting "${meeting.bot_name}" ended with no captured transcript (no captions were received).`,
         created_at: new Date().toISOString(),
+        engagement_id: meeting.engagement_id,
       });
     } else if (finalize && meeting.session_id) {
       setSessionComplete.run(meeting.session_id);
       insertActivity.run({
         text: `Meeting "${meeting.bot_name}" ended.`,
         created_at: new Date().toISOString(),
+        engagement_id: meeting.engagement_id,
       });
     }
     return null;
@@ -124,6 +126,7 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
       insertActivity.run({
         text: `Meeting "${meeting.bot_name}" ended — transcript captured (${newChunks.length} new line(s)) but GROQ_API_KEY isn't set, so no knowledge was extracted.`,
         created_at: new Date().toISOString(),
+        engagement_id: meeting.engagement_id,
       });
     }
     return null; // last_extracted_seq untouched — retried automatically once a key is added
@@ -255,6 +258,7 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
         ? `Meeting "${meeting.bot_name}" ended — ${knowledgeObjects.length} knowledge object(s) extracted in the final pass.`
         : `Meeting "${meeting.bot_name}" is still in progress — ${knowledgeObjects.length} new knowledge object(s) extracted live.`,
       created_at: now.toISOString(),
+      engagement_id: meeting.engagement_id,
     });
   });
   tx();

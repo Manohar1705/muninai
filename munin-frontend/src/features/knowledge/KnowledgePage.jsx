@@ -15,8 +15,8 @@ import {
 import { useKnowledge } from "./hooks/useKnowledge";
 import { useNavigate } from "react-router-dom";
 /* ============================== KNOWLEDGE BASE ============================== */
-function KnowledgeBase() {
-  const { knowledgeObjects } = useKnowledge();
+function KnowledgeBase({engagementId}) {
+  const { knowledgeObjects } = useKnowledge(engagementId);
   const navigate = useNavigate();
   const goToTranscript = (ko) => {
     const segTime = ko.source.split(", ").pop();
