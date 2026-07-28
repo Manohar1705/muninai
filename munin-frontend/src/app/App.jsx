@@ -129,12 +129,12 @@ const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
             element={<KnowledgeBase />}
           />
 
-          <Route
+          {/* <Route
             path="/coverage"
             element={
               <Coverage />
             }
-          />
+          /> */}
 
           <Route
             path="/sme"

@@ -26,7 +26,7 @@ const mediaRoutes = require("./routes/media");
 const engagementsRoutes = require("./routes/engagements");
 const modulesRoutes = require("./routes/modules");
 const { startTunnel } = require("./tunnel");
-initDb();
+
 const { db } = require("./db");
 
 const app = express();

@@ -517,12 +517,10 @@ router.post("/", async (req, res) => {
   if (!message || !String(message).trim()) {
     return res.status(400).json({ error: "message is required" });
   }
-  console.log("MESSAGE:", message);
   const conversationId = ensureConversation(incomingId);
   maybeTitleConversation(conversationId, message);
   saveMessage(conversationId, "user", message, null, false);
   const dbAnswer = tryDatabaseQuery(message);
-  console.log("DB ANSWER:", dbAnswer);
   if (dbAnswer.answered) {
     saveMessage(
       conversationId,
@@ -573,9 +571,7 @@ router.post("/", async (req, res) => {
      
 
       
-      const result = await askLlm(message, candidates, history, dbContext, conversationStats);
-      console.log("LLM RESULT:", result);
-      
+      const result = await askLlm(message, candidates, history, dbContext, conversationStats);  
       if (result.mode === "chat") {
         reply = result.answer;
         isGap = false;
@@ -585,9 +581,6 @@ router.post("/", async (req, res) => {
         citation = buildCitation(ko);
         matchedKoId = ko ? ko.id : null;
         isGap = false;
-        console.log("RESULT COVERED:", result.covered);
-        console.log("SOURCE ID:", result.sourceId);
-        console.log("CITATION:", citation);
       } else {
         reply = result.answer || "I couldn't find this information in the KT knowledge base.";
         isGap = false;

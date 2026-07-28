@@ -20,9 +20,6 @@ router.get("/status", (req, res) => {
 
 // POST /api/settings/reset — wipes and re-seeds all demo data so the
 // walkthrough (including the Session 9 upload) is repeatable.
-router.post("/reset", (req, res) => {
-  resetDemoData();
-  res.json({ ok: true, message: "Demo data reset to initial seed state." });
-});
+
 
 module.exports = router;
