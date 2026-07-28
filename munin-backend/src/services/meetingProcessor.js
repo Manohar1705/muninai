@@ -21,7 +21,7 @@ const { db } = require("../db");
 const { isGroqConfigured, extractKnowledgeFromText } = require("./llm");
 const { bumpReadinessForKnowledgeObjects } = require("./readiness");
 const { guessModule } = require("./keywordMatch");
-const { listModules} = require("./modules");
+const { listModules, ensureModule } = require("./modules");
 
 const TERMINAL_STATUSES = new Set(["call_ended", "done"]);
 function isTerminalStatus(status) {
@@ -153,7 +153,21 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
   // trying while the meeting is still sitting in "Unclassified".
   let meetingTopic = meeting.module;
   if (!meetingTopic || meetingTopic === "Unclassified") {
-    meetingTopic = guessModule(transcriptText, listModules(meeting.engagement_id).map((m) => m.name));
+    // 1st: cheap word-match against existing modules (includes both modules
+    // with completed sessions AND manually-added ones from Engagement Setup
+    // — listModules() already returns both together as one list).
+    const knownModuleNames = listModules(meeting.engagement_id).map((m) => m.name);
+    const wordMatch = guessModule(transcriptText, knownModuleNames);
+
+    if (wordMatch !== "Unclassified") {
+      meetingTopic = wordMatch;
+    } else {
+      // 2nd: only when the word-match found nothing, fall back to the AI's
+      // own module choice for this chunk (it already checks existing
+      // modules first internally, per the updated extraction prompt).
+      meetingTopic = knowledgeObjects[0]?.module || "Unclassified";
+      ensureModule(meetingTopic, meeting.engagement_id);
+    }
   }
   db.prepare(`
     UPDATE meetings

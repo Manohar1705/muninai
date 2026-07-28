@@ -18,11 +18,15 @@ Rules:
 - "type": one of "Procedure", "Architecture", "Gotcha", "Configuration", "Ownership", "Other".
 - "module": Choose a short, specific topic name (1-4 words) that reflects the actual subject being discussed.
 
+Known existing modules for this engagement (from sessions and manually planned modules):
+{{VALID_MODULES}}
+
 Rules for module:
+- FIRST check if the topic reasonably matches one of the known existing modules listed above — if so, reuse that exact module name, word-for-word, even if the source doesn't use the exact same phrasing.
+- Only if none of the known existing modules genuinely fit the topic, create a new short, specific module name based on the actual subject.
 - Prefer the real topic being discussed.
 - Use specific names rather than broad categories.
 - Preserve meaningful topic names from the source.
-- If the discussion is about a previously unseen topic, create a new topic name based on the actual subject.
 
 Examples:
 - Football discussion -> "football"
