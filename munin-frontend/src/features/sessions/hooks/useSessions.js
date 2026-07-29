@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { sessionsApi } from "../api";
-
+import { invalidateEngagementScopedQueries } from "../../../shared/api/client";
 export function useSessions(engagementId) {
   const queryClient = useQueryClient();
   const queryKey = ["sessions", engagementId];
@@ -29,7 +29,7 @@ export function useSessions(engagementId) {
       },
     ]);
     try {
-      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      invalidateEngagementScopedQueries(queryClient, engagementId);
     } catch (err) {
       console.error(err);
     }

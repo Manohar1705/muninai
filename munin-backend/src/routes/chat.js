@@ -244,7 +244,7 @@ function buildDatabaseContext(engagementId) {
   
 }
 
-function tryDatabaseQuery(question) {
+function tryDatabaseQuery(question, engagementId) {
   const q = question.toLowerCase();
 
   if (
@@ -252,7 +252,7 @@ function tryDatabaseQuery(question) {
     q.includes("number of sessions")
   ) {
     const count =
-      db.prepare(`SELECT COUNT(*) AS c FROM sessions`).get().c;
+      db.prepare(`SELECT COUNT(*) AS c FROM sessions WHERE engagement_id = ?`).get(engagementId).c;
 
     return {
       answered: true,
@@ -265,7 +265,7 @@ function tryDatabaseQuery(question) {
     q.includes("number of meetings")
   ) {
     const count =
-      db.prepare(`SELECT COUNT(*) AS c FROM meetings`).get().c;
+      db.prepare(`SELECT COUNT(*) AS c FROM meetings WHERE engagement_id = ?`).get(engagementId).c;
 
     return {
       answered: true,
@@ -280,9 +280,10 @@ function tryDatabaseQuery(question) {
     const count =
       db.prepare(`
         SELECT COUNT(*) AS c
-        FROM gaps
-        WHERE status = 'Open'
-      `).get().c;
+        FROM gaps g
+        JOIN modules m ON m.name = g.module
+        WHERE g.status = 'Open' AND m.engagement_id = ?
+      `).get(engagementId).c;
 
     return {
       answered: true,
@@ -295,11 +296,13 @@ function tryDatabaseQuery(question) {
   ) {
     const row =
       db.prepare(`
-        SELECT module, score
-        FROM readiness
-        ORDER BY score DESC
+        SELECT r.module, r.score
+        FROM readiness r
+        JOIN modules m ON m.name = r.module
+        WHERE m.engagement_id = ?
+        ORDER BY r.score DESC
         LIMIT 1
-      `).get();
+      `).get(engagementId);
 
     return {
       answered: true,
@@ -312,11 +315,13 @@ function tryDatabaseQuery(question) {
   ) {
     const row =
       db.prepare(`
-        SELECT module, score
-        FROM readiness
-        ORDER BY score ASC
+        SELECT r.module, r.score
+        FROM readiness r
+        JOIN modules m ON m.name = r.module
+        WHERE m.engagement_id = ?
+        ORDER BY r.score ASC
         LIMIT 1
-      `).get();
+      `).get(engagementId);
 
     return {
       answered: true,
@@ -329,10 +334,12 @@ function tryDatabaseQuery(question) {
     q.includes("show readiness")
   ) {
     const rows = db.prepare(`
-      SELECT module, score
-      FROM readiness
-      ORDER BY score DESC
-    `).all();
+      SELECT r.module, r.score
+      FROM readiness r
+      JOIN modules m ON m.name = r.module
+      WHERE m.engagement_id = ?
+      ORDER BY r.score DESC
+    `).all(engagementId);
 
     return {
       answered: true,
@@ -347,8 +354,9 @@ function tryDatabaseQuery(question) {
     const rows = db.prepare(`
       SELECT name
       FROM modules
+      WHERE engagement_id = ?
       ORDER BY name
-    `).all();
+    `).all(engagementId);
 
     return {
       answered: true,
@@ -363,8 +371,9 @@ function tryDatabaseQuery(question) {
     const rows = db.prepare(`
       SELECT meeting_title
       FROM meetings
+      WHERE engagement_id = ?
       ORDER BY created_at DESC
-    `).all();
+    `).all(engagementId);
 
     return {
       answered: true,
@@ -379,8 +388,9 @@ function tryDatabaseQuery(question) {
     const row = db.prepare(`
       SELECT name, phase
       FROM engagements
+      WHERE id = ?
       LIMIT 1
-    `).get();
+    `).get(engagementId);
 
     if (row) {
       return {
@@ -541,7 +551,7 @@ router.post("/", async (req, res) => {
   const conversationId = ensureConversation(incomingId, engagementId);
   maybeTitleConversation(conversationId, message);
   saveMessage(conversationId, "user", message, null, false);
-  const dbAnswer = tryDatabaseQuery(message);
+  const dbAnswer = tryDatabaseQuery(message, engagementId);
   if (dbAnswer.answered) {
     saveMessage(
       conversationId,

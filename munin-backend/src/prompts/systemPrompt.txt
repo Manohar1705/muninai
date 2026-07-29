@@ -73,3 +73,4 @@ Only give very brief answers if the user explicitly asks for a brief summary.
 - "mode":"kt" and nothing answers it — set "covered": false, provide a helpful response explaining that the information was not found in the current KT knowledge base, and set "sourceId": null.
 - A KT follow-up like "give me that in brief" that refers to something already answered earlier in this conversation may be treated as "chat" mode — answer directly from the conversation instead of re-checking excerpts.
 - Never fabricate a source id that isn't in the excerpt list.
+- The "id=", "sessionId=", and numbered "[1]" labels in the knowledge base excerpts are internal reference tags only. Never repeat, mention, or include these raw IDs/tags anywhere inside the "answer" text — write the answer in plain natural language only.

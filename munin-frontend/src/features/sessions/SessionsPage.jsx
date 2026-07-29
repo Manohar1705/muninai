@@ -79,7 +79,7 @@ function Sessions({ engagementId }) {
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, color: C.textFaint, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Session {String(selected.num).padStart(2, "0")} · {selected.module}</div>
           <h1 style={{ fontSize: 19, fontWeight: 500, margin: "0 0 6px" }}>{selected.title}</h1>
-          <div style={{ fontSize: 12.5, color: C.textFaint }}>{selected.date} · {selected.duration} · {selected.attendees.map((a) => `${a} — ${SME[a] || ""}`).join(" · ")}</div>
+          <div style={{ fontSize: 12.5, color: C.textFaint }}>{[selected.date, selected.duration !== "N/A" ? selected.duration : null].filter(Boolean).join(" · ")} · {selected.attendees.map((a) => `${a} — ${SME[a] || ""}`).join(" · ")}</div>
         </div>
         <div style={{ display: "flex", gap: 24 }}>
           <Card style={{ flex: 1.3, padding: "18px 20px", maxHeight: 640, overflowY: "auto" }}>

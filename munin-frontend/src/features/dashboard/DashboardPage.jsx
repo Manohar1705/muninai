@@ -102,7 +102,7 @@ function Dashboard({ engagementId }) {
 
       <div style={{ marginTop: 24, display: "flex", gap: 10 }}>
         <button onClick={() => navigate("/sessions")} style={btnPrimary}>Go to sessions <Icon d={icons.arrowRight} size={14} /></button>
-        <button onClick={() => navigate("/coverage")} style={btnGhost}>Review open gaps</button>
+        {/* <button onClick={() => navigate("/coverage")} style={btnGhost}>Review open gaps</button> */}
       </div>
     </div>
   );

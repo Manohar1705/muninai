@@ -6,10 +6,13 @@ const router = express.Router();
 
 // Speaker labels that don't represent an actual SME/person contributing
 // knowledge — filtered out of both contribution metrics below.
-const NON_PERSON_SPEAKERS = new Set(["Munin", "Unknown speaker", "Document", "Recording"]);
+const NON_PERSON_SPEAKERS = new Set(["munin", "document", "recording"]);
 function isRealSpeaker(name) {
   const trimmed = (name || "").trim();
-  return trimmed.length > 0 && !NON_PERSON_SPEAKERS.has(trimmed);
+  if (!trimmed) return false;
+  const lower = trimmed.toLowerCase();
+  if (lower.includes("unknown")) return false;
+  return !NON_PERSON_SPEAKERS.has(lower);
 }
 
 // Computes two contribution metrics per speaker across a module's sessions:
