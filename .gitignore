@@ -6,4 +6,4 @@ node_modules
 *.db-wal
 *.txt
 *.cmd
-*.cmd
+.vscode

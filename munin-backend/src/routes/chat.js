@@ -1,8 +1,8 @@
 const express = require("express");
 const { nanoid } = require("nanoid");
 const { db } = require("../db");
-const { findBestMatch, guessModule } = require("../services/keywordMatch");
-const { isLlmConfigured, askLlm } = require("../services/llm");
+const { findBestMatch, guessModule } = require("../services/ai-core/keywordMatch");
+const { isLlmConfigured, askLlm } = require("../services/ai-core/llm");
 
 const router = express.Router();
 
@@ -10,7 +10,7 @@ const NOT_COVERED_TEXT = "This hasn't been covered in KT yet — I've logged it 
 
 async function loadKnowledgeObjects(engagementId) {
   const rows = await db.prepare(`
-    SELECT ko.* FROM knowledge_objects ko
+    SELECT ko.*, s.title AS "sessionTitle" FROM knowledge_objects ko
     JOIN sessions s ON s.id = ko.session_id
     WHERE s.engagement_id = ?
   `).all(engagementId);
@@ -18,6 +18,7 @@ async function loadKnowledgeObjects(engagementId) {
     id: k.id, title: k.title, type: k.type, module: k.module,
     description: k.description, confidence: k.confidence,
     needsReview: !!k.needs_review, source: k.source,
+    sessionTitle: k.sessionTitle,
     sessionId: k.session_id, timestamp: k.segment_timestamp, speaker: k.speaker,
   }));
 }
@@ -43,13 +44,19 @@ async function loadTranscriptSegments(engagementId) {
     confidence: 1,
     needsReview: false,
     source: `${r.sessionTitle} (${r.sourceType}), ${r.timestamp}`,
+    sessionTitle: r.sessionTitle,
     sessionId: r.sessionId, timestamp: r.timestamp, speaker: r.speaker,
   }));
 }
 
 function buildCitation(item) {
   if (!item) return null; 
-  return { source: item.source, sessionId: item.sessionId || null, timestamp: item.timestamp || null };
+  return {
+    source: item.source,
+    sessionId: item.sessionId || null,
+    sessionTitle: item.sessionTitle || null,
+    timestamp: item.timestamp || null,
+  };
 }
 
 function getRecentHistory(conversationId, limit = 25) {
@@ -524,16 +531,27 @@ router.get("/history", async (req, res) => {
   if (!conversationId) return res.json([]);
   const rows = await db
     .prepare(
-      `SELECT role, text, citation, citation_session_id AS "citationSessionId",
-              citation_timestamp AS "citationTimestamp", is_gap AS "isGap", created_at AS "createdAt"
-       FROM chat_messages WHERE conversation_id = ? ORDER BY id ASC`
+      `SELECT cm.role, cm.text, cm.citation,
+              cm.citation_session_id AS "citationSessionId",
+              s.title AS "citationSessionTitle",
+              cm.citation_timestamp AS "citationTimestamp",
+              cm.is_gap AS "isGap", cm.created_at AS "createdAt"
+       FROM chat_messages cm
+       LEFT JOIN sessions s ON s.id = cm.citation_session_id
+       WHERE cm.conversation_id = ?
+       ORDER BY cm.id ASC`
     )
     .all(conversationId);
   res.json(
     rows.map((r) => ({
       role: r.role,
       text: r.text,
-      citation: r.citation ? { source: r.citation, sessionId: r.citationSessionId, timestamp: r.citationTimestamp } : null,
+      citation: r.citation ? {
+        source: r.citation,
+        sessionId: r.citationSessionId,
+        sessionTitle: r.citationSessionTitle,
+        timestamp: r.citationTimestamp,
+      } : null,
       isGap: !!r.isGap,
       createdAt: r.createdAt,
     }))

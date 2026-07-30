@@ -5,13 +5,13 @@ const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
 const { nanoid } = require("nanoid");
 const { db } = require("../db");
-const { isGroqConfigured, extractKnowledgeFromText } = require("../services/llm");
+const { isGroqConfigured, extractKnowledgeFromText } = require("../services/ai-core/llm");
 const { bumpReadinessForKnowledgeObjects } = require("../services/readiness");
 const {
   UNCLASSIFIED_MODULE,
   guessModule,
   selectBestKnownModule,
-} = require("../services/keywordMatch");
+} = require("../services/ai-core/keywordMatch");
 const { listModules } = require("../services/modules");
 
 const router = express.Router();

@@ -1,4 +1,4 @@
-// const { MODULES } = require("../data/seedData");
+// const { MODULES } = require("../../data/seedData");
 
 const STOPWORDS = new Set([
   "the", "a", "an", "is", "are", "was", "were", "what", "how", "why", "when",

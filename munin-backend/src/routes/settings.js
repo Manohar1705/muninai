@@ -1,6 +1,6 @@
 const express = require("express");
 const { resetDemoData } = require("../db");
-const { isGroqConfigured } = require("../services/llm");
+const { isGroqConfigured } = require("../services/ai-core/llm");
 const { isRecallConfigured, buildWebhookUrl } = require("../services/meetingBot");
 const { isLangfuseConfigured } = require("../services/observability");
 

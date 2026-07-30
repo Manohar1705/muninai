@@ -18,12 +18,12 @@
 
 const { nanoid } = require("nanoid");
 const { db } = require("../db");
-const { isGroqConfigured, extractKnowledgeFromText } = require("./llm");
+const { isGroqConfigured, extractKnowledgeFromText } = require("./ai-core/llm");
 const { bumpReadinessForKnowledgeObjects } = require("./readiness");
 const {
   selectBestKnownModule,
   UNCLASSIFIED_MODULE,
-} = require("./keywordMatch");
+} = require("./ai-core/keywordMatch");
 const { listModules } = require("./modules");
 
 const TERMINAL_STATUSES = new Set(["call_ended", "done"]);

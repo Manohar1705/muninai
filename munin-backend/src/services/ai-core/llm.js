@@ -4,10 +4,10 @@ const {
   MODULE_MATCH_MIN_CONFIDENCE,
   UNCLASSIFIED_MODULE,
   normalizeKnownModule,
-  tokenize,
 } = require("./keywordMatch");
-const { traceLlmCall } = require("./observability");
-const {listModules} = require("./modules");
+const { traceLlmCall } = require("../observability");
+const { groundLlmResult, shortlistCandidates } = require("./chatRetrieval");
+const {listModules} = require("../modules");
 // const { MODULES } = require("../data/seedData");
 
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
@@ -28,12 +28,12 @@ function isLlmConfigured() {
 
 
 const extractionPromptTemplate = fs.readFileSync(
-  path.join(__dirname, "../prompts/extractionPrompt.txt"),
+  path.join(__dirname, "../../prompts/extractionPrompt.txt"),
   "utf8"
 );
 
 const systemPromptTemplate = fs.readFileSync(
-  path.join(__dirname, "../prompts/systemPrompt.txt"),
+  path.join(__dirname, "../../prompts/systemPrompt.txt"),
   "utf8"
 );
 async function buildExtractionPrompt(text, sourceLabel, engagementId) {
@@ -122,31 +122,6 @@ async function extractKnowledgeFromText(text, sourceLabel, engagementId) {
         };
       });
   });
-}
-
-/**
- * Cheaply narrows the full knowledge base down to a shortlist of candidate
- * objects so we don't ship the entire KB as context on every request.
- */
-function shortlistCandidates(question, knowledgeObjects, limit = 50) {
-  const qWords = tokenize(question);
-  const scored = knowledgeObjects.map((k) => {
-    const haystack = `${k.title} ${k.description} ${k.module} ${k.type} ${k.source || ""} ${k.sessionId || ""}`.toLowerCase();
-    let score = 0;
-    for (const w of qWords) if (haystack.includes(w)) score += 1;
-    return { k, score };
-  });
-  scored.sort((a, b) => b.score - a.score);
-
-  // Always send some KT context, even when keyword matching is weak.
-  const matches = scored.filter((s) => s.score > 0);
-
-  if (matches.length > 0) {
-    return matches.slice(0, limit).map((s) => s.k);
-  }
-
-  // return scored.slice(0, Math.min(limit, 30)).map((s) => s.k);
-  return [];
 }
 
 function buildSystemPrompt(candidates, dbContext = {}, conversationStats = {}) {
@@ -284,7 +259,7 @@ ${(dbContext.readinessSummary || [])
 
 
 async function askLlm(question, knowledgeObjects, history = [], dbContext = {}, conversationStats = {}) {
-  const candidates = shortlistCandidates(question, knowledgeObjects, 50);
+  const candidates = shortlistCandidates(question, knowledgeObjects, history, 50);
   const system = buildSystemPrompt(candidates, dbContext, conversationStats);
   const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
  
@@ -337,17 +312,7 @@ async function askLlm(question, knowledgeObjects, history = [], dbContext = {}, 
       };
     }
  
-    if (parsed.covered && parsed.sourceId) {
-      const match = knowledgeObjects.find((k) => k.id === parsed.sourceId);
-
-      if (match) {
-        parsed.sourceId = match.id;
-      } else {
-        parsed.sourceId = null;
-      }
-    }
- 
-    return parsed;
+    return groundLlmResult(parsed, candidates);
   });
 }
 

@@ -5,7 +5,7 @@ const {
   UNCLASSIFIED_MODULE,
   normalizeKnownModule,
   selectBestKnownModule,
-} = require("../src/services/keywordMatch");
+} = require("../src/services/ai-core/keywordMatch");
 
 const allowedModules = ["Payments Core", "Customer Notifications"];
 

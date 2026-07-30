@@ -15,13 +15,13 @@ const express = require("express");
 const multer = require("multer");
 const { nanoid } = require("nanoid");
 const { db } = require("../db");
-const { isGroqConfigured, extractKnowledgeFromText, transcribeAudio } = require("../services/llm");
+const { isGroqConfigured, extractKnowledgeFromText, transcribeAudio } = require("../services/ai-core/llm");
 const { bumpReadinessForKnowledgeObjects } = require("../services/readiness");
 const {
   UNCLASSIFIED_MODULE,
   guessModule,
   selectBestKnownModule,
-} = require("../services/keywordMatch");
+} = require("../services/ai-core/keywordMatch");
 const { listModules } = require("../services/modules");
 
 const router = express.Router();
