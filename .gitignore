@@ -4,7 +4,6 @@ node_modules
 .DS_Store
 *.db-shm
 *.db-wal
-package-lock.json
 *.txt
 *.cmd
 *.cmd

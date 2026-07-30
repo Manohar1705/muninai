@@ -14,7 +14,7 @@ function serialize(k) {
 
 // GET /api/knowledge-objects?module=&type=&q=
 // GET /api/knowledge-objects?module=&type=&q=&engagementId=
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   const { module, type, q, engagementId } = req.query;
   let sql = `SELECT ko.* FROM knowledge_objects ko JOIN sessions s ON s.id = ko.session_id WHERE 1=1`;
   const params = [];
@@ -39,13 +39,13 @@ router.get("/", (req, res) => {
   }
   sql += ` ORDER BY id ASC`;
 
-  const rows = db.prepare(sql).all(...params);
+  const rows = await db.prepare(sql).all(...params);
   res.json(rows.map(serialize));
 });
 
 // GET /api/knowledge-objects/:id
-router.get("/:id", (req, res) => {
-  const row = db.prepare(`SELECT * FROM knowledge_objects WHERE id = ?`).get(req.params.id);
+router.get("/:id", async (req, res) => {
+  const row = await db.prepare(`SELECT * FROM knowledge_objects WHERE id = ?`).get(req.params.id);
   if (!row) return res.status(404).json({ error: "Knowledge object not found" });
   res.json(serialize(row));
 });

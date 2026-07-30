@@ -17,7 +17,7 @@ Munin supports the complete knowledge-transfer workflow:
    - uploaded text, Markdown, PDF, or DOCX documents;
    - uploaded audio or video recordings.
 4. Use Groq to extract reusable knowledge objects such as procedures, architecture decisions, configurations, ownership details, and gotchas.
-5. Store sessions, transcripts, extracted knowledge, gaps, meeting state, and chat history in SQLite.
+5. Store sessions, transcripts, extracted knowledge, gaps, meeting state, and chat history in PostgreSQL.
 6. Review readiness, coverage, SME contribution, and key-person risk.
 7. Ask Munin questions and follow citations back to the supporting session or transcript.
 
@@ -51,7 +51,7 @@ Munin provides three capture paths.
 1. Open **Meetings** and enter the meeting URL, title, and bot name.
 2. The backend asks Recall.ai to send a bot to the call.
 3. Recall.ai sends live transcript and participant events to Munin's public webhook.
-4. Munin buffers transcript chunks in SQLite.
+4. Munin buffers transcript chunks in PostgreSQL.
 5. The frontend polls the meeting status.
 6. While the call is active, Munin performs throttled incremental extraction so knowledge can appear before the meeting ends.
 7. When the meeting ends—or Munin is removed manually—a final extraction pass processes the remaining transcript and marks the derived session complete.
@@ -112,7 +112,7 @@ Only sessions whose source is a KT session or live meeting count toward planned-
 
 Ask Munin uses a layered answering flow:
 
-1. Recognizable database questions—such as session counts, meeting counts, gaps, modules, or readiness—are answered directly from SQLite.
+1. Recognizable database questions—such as session counts, meeting counts, gaps, modules, or readiness—are answered directly from PostgreSQL.
 2. When Groq is configured, Munin sends a shortlist of relevant knowledge objects and transcript excerpts, recent conversation turns, and live database context to the configured model.
 3. The model distinguishes ordinary conversation from engagement-specific KT questions.
 4. KT answers can include a citation with a session ID and transcript timestamp.
@@ -139,7 +139,7 @@ Chat history is stored as separate conversations. Conversations can be renamed, 
                       Groq knowledge extraction
                                │
                                ▼
-          SQLite sessions, transcripts, knowledge, and gaps
+        PostgreSQL sessions, transcripts, knowledge, and gaps
                                │
                                ▼
             React dashboard, repository, SME map, and chat
@@ -159,7 +159,7 @@ muninai/
 │   │   ├── prompts/          LLM extraction and chat prompts
 │   │   ├── routes/           REST API route modules
 │   │   ├── services/         LLM, meeting, readiness, and module logic
-│   │   ├── db.js             SQLite schema, migrations, and seeding
+│   │   ├── db.js             PostgreSQL schema, pooling, and seeding
 │   │   └── server.js         Express application entry point
 │   └── package.json
 ├── munin-frontend/
@@ -187,7 +187,7 @@ muninai/
 
 - Node.js 22
 - Express
-- SQLite via `better-sqlite3`
+- PostgreSQL via `pg`
 - Multer
 - `pdf-parse`
 - Mammoth
@@ -204,6 +204,7 @@ muninai/
 
 - Node.js 22
 - npm
+- A PostgreSQL database (local or hosted, such as Amazon RDS)
 - A Groq API key for AI extraction, generative chat, and recording transcription
 - A Recall.ai API key for live meeting capture
 - `cloudflared` on `PATH` when using automatic local webhook tunnelling
@@ -227,7 +228,12 @@ Create `munin-backend/.env` from `munin-backend/.env.example`:
 ```env
 PORT=4000
 CORS_ORIGIN=http://localhost:5173
-DB_PATH=./munin.db
+DB_HOST=your-rds-endpoint.amazonaws.com
+DB_PORT=5432
+DB_NAME=munin
+DB_USER=munin_app
+DB_PASSWORD=your-password
+PGSSL=
 
 GROQ_API_KEY=
 GROQ_MODEL=llama-3.3-70b-versatile
@@ -246,6 +252,8 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 
 Configuration behavior:
 
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` are required. The backend safely constructs the PostgreSQL connection URL from them.
+- Set `PGSSL=disable` only for local PostgreSQL servers that do not use TLS; leave it unset for RDS.
 - Without `GROQ_API_KEY`, generative chat and all extraction/transcription flows are disabled; Ask Munin retains its keyword fallback.
 - Without `RECALL_API_KEY`, Munin cannot join live meetings.
 - Recall.ai must be able to reach `PUBLIC_BASE_URL/api/meetings/webhook` to deliver transcripts.
@@ -338,11 +346,7 @@ All routes are mounted below `/api`.
 
 ## Database
 
-Munin creates the SQLite database automatically on backend startup. The default file is:
-
-```text
-munin-backend/munin.db
-```
+Munin constructs its PostgreSQL connection from the five `DB_*` environment variables and creates its tables and demo seed data automatically on startup. The database itself must already exist.
 
 The schema includes:
 
@@ -356,7 +360,7 @@ The schema includes:
 - chat conversations and messages;
 - application state used by the repeatable demo flow.
 
-The database runs in WAL mode and applies additive migrations during startup.
+Startup seeding is transactionally serialized so rolling deployments can safely start multiple backend instances against the same database.
 
 To initialize or seed explicitly:
 

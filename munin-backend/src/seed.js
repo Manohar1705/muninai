@@ -1,5 +1,16 @@
 require("dotenv").config();
-const { initDb } = require("./db");
+const { db, initDb } = require("./db");
 
-initDb();
-console.log("Munin database initialized and seeded (or already up to date).");
+async function seed() {
+  try {
+    await initDb();
+    console.log("Munin database initialized and seeded (or already up to date).");
+  } catch (err) {
+    console.error("Database initialization failed:", err);
+    process.exitCode = 1;
+  } finally {
+    await db.pool.end();
+  }
+}
+
+seed();

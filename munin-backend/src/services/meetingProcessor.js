@@ -80,7 +80,7 @@ const nextNum = db.prepare(`SELECT COALESCE(MAX(num), 0) + 1 AS n FROM sessions`
 const nextSegSeq = db.prepare(`SELECT COALESCE(MAX(seq), -1) + 1 AS n FROM transcript_segments WHERE session_id = ?`);
 const stampThrottle = db.prepare(`UPDATE meetings SET last_extracted_at = ? WHERE id = ?`);
 const recordProgress = db.prepare(
-  `UPDATE meetings SET session_id = @session_id, last_extracted_seq = @last_extracted_seq, last_extracted_at = @last_extracted_at, updated_at = datetime('now') WHERE id = @id`
+  `UPDATE meetings SET session_id = @session_id, last_extracted_seq = @last_extracted_seq, last_extracted_at = @last_extracted_at, updated_at = NOW() WHERE id = @id`
 );
 const distinctSpeakers = db.prepare(`SELECT DISTINCT speaker FROM meeting_transcript_chunks WHERE bot_id = ? AND speaker IS NOT NULL`);
 
@@ -98,21 +98,21 @@ const distinctSpeakers = db.prepare(`SELECT DISTINCT speaker FROM meeting_transc
  * @returns {Promise<{sessionId: string, knowledgeObjects: Array, isFirstPass: boolean}|null>}
  */
 async function processMeetingChunks(meetingId, { finalize = false } = {}) {
-  const meeting = getMeetingById.get(meetingId);
+  const meeting = await getMeetingById.get(meetingId);
   if (!meeting || !meeting.bot_id) return null;
 
-  const newChunks = getNewChunks(meeting.bot_id, meeting.last_extracted_seq);
+  const newChunks = await getNewChunks(meeting.bot_id, meeting.last_extracted_seq);
 
   if (!newChunks.length) {
     if (finalize && !meeting.session_id) {
-      insertActivity.run({
+      await insertActivity.run({
         text: `Munin's meeting "${meeting.bot_name}" ended with no captured transcript (no captions were received).`,
         created_at: new Date().toISOString(),
         engagement_id: meeting.engagement_id,
       });
     } else if (finalize && meeting.session_id) {
-      setSessionComplete.run(meeting.session_id);
-      insertActivity.run({
+      await setSessionComplete.run(meeting.session_id);
+      await insertActivity.run({
         text: `Meeting "${meeting.bot_name}" ended.`,
         created_at: new Date().toISOString(),
         engagement_id: meeting.engagement_id,
@@ -123,7 +123,7 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
 
   if (!isGroqConfigured()) {
     if (finalize) {
-      insertActivity.run({
+      await insertActivity.run({
         text: `Meeting "${meeting.bot_name}" ended — transcript captured (${newChunks.length} new line(s)) but GROQ_API_KEY isn't set, so no knowledge was extracted.`,
         created_at: new Date().toISOString(),
         engagement_id: meeting.engagement_id,
@@ -137,7 +137,7 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
   // on every subsequent status poll. last_extracted_seq is deliberately
   // left alone here — these chunks get folded into the next attempt.
   const attemptedAt = new Date().toISOString();
-  stampThrottle.run(attemptedAt, meeting.id);
+  await stampThrottle.run(attemptedAt, meeting.id);
 
   const transcriptText = newChunks.map((c) => `${c.speaker}: ${c.text}`).join("\n");
   // Let extraction errors propagate — the caller decides how to surface
@@ -159,7 +159,7 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
     // 1st: cheap word-match against existing modules (includes both modules
     // with completed sessions AND manually-added ones from Engagement Setup
     // — listModules() already returns both together as one list).
-    const knownModuleNames = listModules(meeting.engagement_id).map((m) => m.name);
+    const knownModuleNames = (await listModules(meeting.engagement_id)).map((m) => m.name);
     const wordMatch = guessModule(transcriptText, knownModuleNames);
 
     if (wordMatch !== "Unclassified") {
@@ -169,27 +169,27 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
       // own module choice for this chunk (it already checks existing
       // modules first internally, per the updated extraction prompt).
       meetingTopic = knowledgeObjects[0]?.module || "Unclassified";
-      ensureModule(meetingTopic, meeting.engagement_id);
+      await ensureModule(meetingTopic, meeting.engagement_id);
     }
   }
-  db.prepare(`
+  await db.prepare(`
     UPDATE meetings
     SET module = ?
     WHERE id = ?
   `).run(meetingTopic, meeting.id);
   if (meeting.session_id) {
-    db.prepare(`
+    await db.prepare(`
       UPDATE sessions
       SET module = ?
       WHERE id = ?
     `).run(meetingTopic, meeting.session_id);
   }
   const savedKOs = [];
-  const tx = db.transaction(() => {
+  const tx = db.transaction(async () => {
     if (isFirstPass) {
-      insertSession.run({
+      await insertSession.run({
         id: sessionId,
-        num: nextNum.get().n,
+        num: (await nextNum.get()).n,
         module: meetingTopic,
         title: resolveSessionTitle(meeting),
         date: now.toISOString().slice(0, 10),
@@ -200,12 +200,12 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
         engagement_id: meeting.engagement_id,
       });
     } else if (finalize) {
-      setSessionComplete.run(sessionId);
+      await setSessionComplete.run(sessionId);
     }
 
-    let seq = nextSegSeq.get(sessionId).n;
+    let seq = (await nextSegSeq.get(sessionId)).n;
     for (const c of newChunks) {
-      insertSegment.run({
+      await insertSegment.run({
         session_id: sessionId,
         seq: seq,
         timestamp: c.timestamp || formatTimestamp(seq * 5),
@@ -220,7 +220,7 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
     // in this meeting's transcript. Anything else (a hallucinated or
     // paraphrased name) is dropped rather than stored as a false attribution.
     const knownSpeakers = new Map(
-      distinctSpeakers.all(meeting.bot_id).map((r) => [String(r.speaker || "").trim().toLowerCase(), r.speaker])
+      (await distinctSpeakers.all(meeting.bot_id)).map((r) => [String(r.speaker || "").trim().toLowerCase(), r.speaker])
     );
     const resolveSpeaker = (claimed) => {
       if (!claimed) return null;
@@ -229,7 +229,7 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
 
     for (const k of knowledgeObjects) {
       const koId = `ko-${nanoid(8)}`;
-      insertKO.run({
+      await insertKO.run({
         id: koId,
         title: k.title,
         type: k.type,
@@ -247,13 +247,13 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
 
     // Refresh attendees from the full chunk history each pass — cheap, and
     // keeps the session's attendee line accurate as new speakers join.
-    const attendees = distinctSpeakers.all(meeting.bot_id).map((r) => r.speaker).filter(Boolean);
-    setSessionAttendees.run(JSON.stringify(attendees.length ? attendees : ["Meeting participant"]), sessionId);
+    const attendees = (await distinctSpeakers.all(meeting.bot_id)).map((r) => r.speaker).filter(Boolean);
+    await setSessionAttendees.run(JSON.stringify(attendees.length ? attendees : ["Meeting participant"]), sessionId);
 
     const lastSeq = newChunks[newChunks.length - 1].seq;
-    recordProgress.run({ id: meeting.id, session_id: sessionId, last_extracted_seq: lastSeq, last_extracted_at: attemptedAt });
+    await recordProgress.run({ id: meeting.id, session_id: sessionId, last_extracted_seq: lastSeq, last_extracted_at: attemptedAt });
 
-    insertActivity.run({
+    await insertActivity.run({
       text: finalize
         ? `Meeting "${meeting.bot_name}" ended — ${knowledgeObjects.length} knowledge object(s) extracted in the final pass.`
         : `Meeting "${meeting.bot_name}" is still in progress — ${knowledgeObjects.length} new knowledge object(s) extracted live.`,
@@ -261,9 +261,9 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
       engagement_id: meeting.engagement_id,
     });
   });
-  tx();
+  await tx();
 
-  bumpReadinessForKnowledgeObjects(savedKOs);
+  await bumpReadinessForKnowledgeObjects(savedKOs);
 
   return { sessionId, knowledgeObjects: savedKOs, isFirstPass };
 }

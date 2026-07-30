@@ -26,11 +26,11 @@ function isRealSpeaker(name) {
 // predate that column (the seeded demo data) don't have it, so those fall
 // back to matching the transcript segment that shares the KO's exact
 // session + timestamp instead.
-function computeModuleContribution(sessionIds) {
+async function computeModuleContribution(sessionIds) {
   if (!sessionIds.length) return [];
   const placeholders = sessionIds.map(() => "?").join(",");
 
-  const segments = db.prepare(`
+  const segments = await db.prepare(`
     SELECT session_id, speaker, text, timestamp
     FROM transcript_segments
     WHERE session_id IN (${placeholders})
@@ -45,7 +45,7 @@ function computeModuleContribution(sessionIds) {
     wordCounts[seg.speaker] = (wordCounts[seg.speaker] || 0) + words;
   }
 
-  const knowledgeObjects = db.prepare(`
+  const knowledgeObjects = await db.prepare(`
     SELECT session_id, segment_timestamp, speaker
     FROM knowledge_objects
     WHERE session_id IN (${placeholders}) AND (speaker IS NOT NULL OR segment_timestamp IS NOT NULL)
@@ -72,21 +72,21 @@ function computeModuleContribution(sessionIds) {
 }
 
 // GET /api/sme-map?engagementId=1
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   const engagementId = req.query.engagementId ? Number(req.query.engagementId) : undefined;
-  const modules = listModules(engagementId);
+  const modules = await listModules(engagementId);
 
-  const riskRows = db.prepare(`SELECT module FROM key_person_risk`).all();
+  const riskRows = await db.prepare(`SELECT module FROM key_person_risk`).all();
   const keyPersonRisk = new Set(riskRows.map((r) => r.module));
 
   const byModule = {};
 
   for (const mod of modules) {
     const sessionRows = engagementId
-      ? db.prepare(`SELECT id FROM sessions WHERE module = ? AND engagement_id = ?`).all(mod.name, engagementId)
-      : db.prepare(`SELECT id FROM sessions WHERE module = ?`).all(mod.name);
+      ? await db.prepare(`SELECT id FROM sessions WHERE module = ? AND engagement_id = ?`).all(mod.name, engagementId)
+      : await db.prepare(`SELECT id FROM sessions WHERE module = ?`).all(mod.name);
     const sessionIds = sessionRows.map((r) => r.id);
-    const contributors = computeModuleContribution(sessionIds);
+    const contributors = await computeModuleContribution(sessionIds);
 
     if (contributors.length) {
       byModule[mod.name] = contributors;
@@ -97,7 +97,7 @@ router.get("/", (req, res) => {
     // No real transcript data for this module yet — fall back to any
     // manually-recorded static contribution rows rather than showing
     // nothing at all.
-    const staticRows = db
+    const staticRows = await db
       .prepare(`SELECT name, share FROM sme_contributions WHERE module = ? ORDER BY share DESC`)
       .all(mod.name);
     if (staticRows.length) {

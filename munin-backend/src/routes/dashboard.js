@@ -8,9 +8,9 @@ const router = express.Router();
 // one engagement: modules are the source of truth, so every number here is
 // derived from listModules(engagementId) (planned vs. actually covered
 // sessions per module) rather than a separate, independently-tracked score.
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   const engagementId = req.query.engagementId ? Number(req.query.engagementId) : undefined;
-  const modules = listModules(engagementId);
+  const modules = await listModules(engagementId);
 
   const modulesCovered = modules.filter((m) => (m.completed_sessions || 0) > 0).length;
   const plannedSessions = modules.reduce((sum, m) => sum + (m.planned_sessions || 0), 0);
@@ -34,8 +34,8 @@ router.get("/", (req, res) => {
     ? Math.min(100, Math.round((completedSessions / plannedSessions) * 100))
     : 0;
 
-  const activity = db
-    .prepare(`SELECT text, created_at AS createdAt FROM activity WHERE engagement_id = ? ORDER BY id DESC LIMIT 12`)
+  const activity = await db
+    .prepare(`SELECT text, created_at AS "createdAt" FROM activity WHERE engagement_id = ? ORDER BY id DESC LIMIT 12`)
     .all(engagementId);
 
   res.json({

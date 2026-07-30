@@ -2,7 +2,7 @@
 
 Backend API for **Munin** — the AI-powered knowledge transfer assistant that attends KT sessions, captures meeting knowledge, extracts reusable insights, and builds a searchable knowledge repository for incoming engineering teams.
 
-The backend integrates with Recall.ai for meeting participation, Groq for AI-powered extraction and Q&A, SQLite for persistence, and Cloudflare Tunnel for local webhook accessibility during development.
+The backend integrates with Recall.ai for meeting participation, Groq for AI-powered extraction and Q&A, PostgreSQL for persistence, and Cloudflare Tunnel for local webhook accessibility during development.
 
 ---
 
@@ -10,7 +10,7 @@ The backend integrates with Recall.ai for meeting participation, Groq for AI-pow
 
 - Node.js
 - Express
-- SQLite (`better-sqlite3`)
+- PostgreSQL (`pg`)
 - Groq
   - Knowledge extraction
   - Ask Munin responses
@@ -56,7 +56,7 @@ The backend integrates with Recall.ai for meeting participation, Groq for AI-pow
 - Automatic Cloudflare Tunnel startup
 - Runtime public URL generation
 - Externalized prompts
-- SQLite auto-initialization
+- PostgreSQL schema initialization and safe demo seeding
 - Optional observability with Langfuse
 
 ---
@@ -69,6 +69,7 @@ The backend integrates with Recall.ai for meeting participation, Groq for AI-pow
 - npm
 - Git
 - Cloudflared
+- A PostgreSQL database (local or hosted, such as Amazon RDS)
 
 Verify installation:
 
@@ -96,7 +97,7 @@ For production:
 npm start
 ```
 
-The SQLite database is created automatically during startup.
+The PostgreSQL schema and demo seed data are created automatically during startup. The database itself must already exist.
 
 ---
 
@@ -111,7 +112,12 @@ PORT=4000
 
 CORS_ORIGIN=http://localhost:5173
 
-DB_PATH=./munin.db
+DB_HOST=your-rds-endpoint.amazonaws.com
+DB_PORT=5432
+DB_NAME=munin
+DB_USER=munin_app
+DB_PASSWORD=your-password
+PGSSL=
 
 GROQ_API_KEY=<your-groq-api-key>
 GROQ_MODEL=llama-3.3-70b-versatile
@@ -131,6 +137,8 @@ LANGFUSE_BASE_URL=https://cloud.langfuse.com
 
 ### Notes
 
+- `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, and `DB_PASSWORD` are required. The backend constructs the PostgreSQL connection URL from them.
+- Set `PGSSL=disable` only for a local PostgreSQL server without TLS. Leave it unset for RDS.
 - Set `RECALL_API_REGION` to the region shown in your own Recall.ai project settings — it varies per account and isn't a fixed value.
 - Leave `PUBLIC_BASE_URL` empty.
 - Cloudflare Tunnel is started automatically.
@@ -632,27 +640,11 @@ Useful during demonstrations and testing.
 
 ## Database
 
-SQLite database location:
+Munin uses the PostgreSQL database configured by the five `DB_*` environment variables. Tables and demo data are initialized automatically during startup.
 
-```text
-munin.db
-```
+### Reset Demo Data
 
-Automatically created and seeded during startup.
-
-### Reset Database
-
-Windows:
-
-```bash
-del munin.db
-```
-
-Linux/macOS:
-
-```bash
-rm munin.db
-```
+Use `POST /api/settings/reset` to clear and reseed the demo data without deleting the PostgreSQL database.
 
 ---
 

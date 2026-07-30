@@ -17,13 +17,13 @@ const insertMeeting = db.prepare(
    VALUES (@id, @bot_id, @meeting_url, @bot_name, @meeting_title, @status, @engagement_id)`
 );
 const updateMeetingBotId = db.prepare(
-  `UPDATE meetings SET bot_id = @bot_id, status = @status, updated_at = datetime('now') WHERE id = @id`
+  `UPDATE meetings SET bot_id = @bot_id, status = @status, updated_at = NOW() WHERE id = @id`
 );
 const updateMeetingStatus = db.prepare(
-  `UPDATE meetings SET status = @status, updated_at = datetime('now') WHERE id = @id`
+  `UPDATE meetings SET status = @status, updated_at = NOW() WHERE id = @id`
 );
 const updateMeetingError = db.prepare(
-  `UPDATE meetings SET status = 'error', error = @error, updated_at = datetime('now') WHERE id = @id`
+  `UPDATE meetings SET status = 'error', error = @error, updated_at = NOW() WHERE id = @id`
 );
 const getMeeting = db.prepare(`SELECT * FROM meetings WHERE id = ?`);
 const getMeetingByBotId = db.prepare(`SELECT * FROM meetings WHERE bot_id = ?`);
@@ -92,11 +92,11 @@ function formatTimestamp(totalSeconds) {
 // Lists all meetings, most recent first — lets the frontend restore the
 // Meetings page (in-progress calls, past ones) after a refresh instead of
 // only ever knowing about meetings joined in the current tab session.
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   const engagementId = req.query.engagementId ? Number(req.query.engagementId) : null;
   const meetings = engagementId
-    ? db.prepare(`SELECT * FROM meetings WHERE engagement_id = ? ORDER BY created_at ASC`).all(engagementId)
-    : db.prepare(`SELECT * FROM meetings ORDER BY created_at ASC`).all();
+    ? await db.prepare(`SELECT * FROM meetings WHERE engagement_id = ? ORDER BY created_at ASC`).all(engagementId)
+    : await db.prepare(`SELECT * FROM meetings ORDER BY created_at ASC`).all();
   res.json({ meetings });
 });
 
@@ -132,7 +132,7 @@ router.post("/join", async (req, res) => {
   const resolvedMeetingTitle = meetingTitle.trim();
   const now = new Date().toISOString();
  
-  insertMeeting.run({
+  await insertMeeting.run({
     id: meetingId,
     bot_id: null,
     meeting_url: meetingUrl.trim(),
@@ -145,8 +145,8 @@ router.post("/join", async (req, res) => {
   try {
     const bot = await createBot({ meetingUrl: meetingUrl.trim(), botName: resolvedBotName });
 
-    updateMeetingBotId.run({ id: meetingId, bot_id: bot.id, status: "joining" });
-    insertActivity.run({
+    await updateMeetingBotId.run({ id: meetingId, bot_id: bot.id, status: "joining" });
+    await insertActivity.run({
       text: `Munin was sent to join a meeting (${resolvedBotName}).`,
       created_at: now,
       engagement_id: Number(engagementId),
@@ -163,7 +163,7 @@ router.post("/join", async (req, res) => {
       },
     });
   } catch (err) {
-    updateMeetingError.run({ id: meetingId, error: err.message });
+    await updateMeetingError.run({ id: meetingId, error: err.message });
     return res.status(502).json({
       error: `Failed to send Munin to the meeting: ${err.message}`,
       meeting: { id: meetingId, status: "error" },
@@ -186,7 +186,7 @@ router.post("/join", async (req, res) => {
 // only subscribed to transcript.data and participant events, not a status
 // webhook), so both paths are driven by this polling route.
 router.get("/:id/status", async (req, res) => {
-  const meeting = getMeeting.get(req.params.id);
+  const meeting = await getMeeting.get(req.params.id);
   if (!meeting) {
     return res.status(404).json({ error: "Meeting not found." });
   }
@@ -210,7 +210,7 @@ router.get("/:id/status", async (req, res) => {
     const justWentTerminal = isTerminalStatus(latest) && !isTerminalStatus(meeting.status);
 
     if (latest !== meeting.status) {
-      updateMeetingStatus.run({ id: meeting.id, status: latest });
+      await updateMeetingStatus.run({ id: meeting.id, status: latest });
     }
 
     if (justWentTerminal) {
@@ -237,7 +237,7 @@ router.get("/:id/status", async (req, res) => {
           );
         }
 
-        const fresh = getMeeting.get(meeting.id);
+        const fresh = await getMeeting.get(meeting.id);
 
         return res.json({
           meeting: {
@@ -257,7 +257,7 @@ router.get("/:id/status", async (req, res) => {
       }
     }
 
-    const fresh = getMeeting.get(meeting.id);
+    const fresh = await getMeeting.get(meeting.id);
     return res.json({ meeting: { ...fresh, status: latest } });
   } catch (err) {
     // Don't overwrite our stored status on a transient polling error —
@@ -277,7 +277,7 @@ router.get("/:id/status", async (req, res) => {
 // Always responds 200, even on a parsing hiccup — this is a webhook Recall
 // will retry on failure, and a malformed/unexpected event shape here isn't
 // worth spamming their retry logs over.
-router.post("/webhook", (req, res) => {
+router.post("/webhook", async (req, res) => {
 
   console.log(
     "WEBHOOK RECEIVED:",
@@ -294,8 +294,8 @@ router.post("/webhook", (req, res) => {
     if (event === "transcript.data") {
       const text = extractTranscriptText(data);
       if (text) {
-        const seq = nextChunkSeq.get(botId).n;
-        insertChunk.run({
+        const seq = (await nextChunkSeq.get(botId)).n;
+        await insertChunk.run({
           bot_id: botId,
           seq,
           speaker: extractSpeaker(data),
@@ -304,7 +304,7 @@ router.post("/webhook", (req, res) => {
         });
       }
     } else if (event === "participant_events.join" || event === "participant_events.leave") {
-      const meeting = getMeetingByBotId.get(botId);
+      const meeting = await getMeetingByBotId.get(botId);
       if (meeting) {
         const inner = data?.data || data;
         const name = inner?.participant?.name || "A participant";
@@ -315,7 +315,7 @@ router.post("/webhook", (req, res) => {
         if (!existingParticipants.includes(name)) {
           existingParticipants.push(name);
 
-          db.prepare(`
+          await db.prepare(`
             UPDATE meetings
             SET participants = ?
             WHERE id = ?
@@ -325,7 +325,7 @@ router.post("/webhook", (req, res) => {
           );
         }
         const action = event.endsWith("join") ? "joined" : "left";
-        insertActivity.run({
+        await insertActivity.run({
           text: `${name} ${action} the meeting Munin is in (${meeting.bot_name}).`,
           created_at: new Date().toISOString(),
           engagement_id: meeting.engagement_id,
@@ -342,7 +342,7 @@ router.post("/webhook", (req, res) => {
 
 // POST /api/meetings/:id/leave
 router.post("/:id/leave", async (req, res) => {
-  const meeting = getMeeting.get(req.params.id);
+  const meeting = await getMeeting.get(req.params.id);
   if (!meeting) {
     return res.status(404).json({ error: "Meeting not found." });
   }
@@ -357,8 +357,8 @@ router.post("/:id/leave", async (req, res) => {
 
   try {
     await leaveBot(meeting.bot_id);
-    updateMeetingStatus.run({ id: meeting.id, status: "call_ended" });
-    insertActivity.run({
+    await updateMeetingStatus.run({ id: meeting.id, status: "call_ended" });
+    await insertActivity.run({
       text: `Munin left the meeting (${meeting.bot_name}).`,
       created_at: new Date().toISOString(),
       engagement_id: meeting.engagement_id,
@@ -366,13 +366,13 @@ router.post("/:id/leave", async (req, res) => {
     try {
       await processMeetingChunks(meeting.id, { finalize: true });
     } catch (err) {
-      const fresh = getMeeting.get(meeting.id);
+      const fresh = await getMeeting.get(meeting.id);
       return res.json({
         meeting: { ...fresh, status: "call_ended" },
         warning: `Left the meeting, but knowledge extraction failed: ${err.message}`,
       });
     }
-    const fresh = getMeeting.get(meeting.id);
+    const fresh = await getMeeting.get(meeting.id);
     return res.json({ meeting: { ...fresh, status: "call_ended" } });
   } catch (err) {
     return res.status(502).json({ error: `Failed to remove bot from meeting: ${err.message}` });
@@ -383,9 +383,9 @@ router.post("/:id/leave", async (req, res) => {
 // session + knowledge objects, if any). Restricted to the meeting's own
 // engagement's defined module list (or "Unclassified") — Munin only ever
 // puts a meeting into one of the modules an engagement has actually defined.
-router.patch("/:id/module", (req, res) => {
+router.patch("/:id/module", async (req, res) => {
   const { module } = req.body || {};
-  const currentMeeting = db
+  const currentMeeting = await db
     .prepare(`SELECT module, engagement_id, session_id FROM meetings WHERE id = ?`)
     .get(req.params.id);
 
@@ -398,7 +398,7 @@ router.patch("/:id/module", (req, res) => {
     return res.status(400).json({ error: "module is required" });
   }
 
-  const allowedNames = listModules(currentMeeting.engagement_id).map((m) => m.name);
+  const allowedNames = (await listModules(currentMeeting.engagement_id)).map((m) => m.name);
   if (trimmedModule !== "Unclassified" && !allowedNames.includes(trimmedModule)) {
     return res.status(400).json({
       error: `"${trimmedModule}" is not a defined module for this engagement. Add it under Engagement Setup first, or choose an existing module.`,
@@ -407,34 +407,34 @@ router.patch("/:id/module", (req, res) => {
 
   const oldModule = currentMeeting.module;
 
-  db.prepare(`UPDATE meetings SET module = ? WHERE id = ?`).run(trimmedModule, req.params.id);
+  await db.prepare(`UPDATE meetings SET module = ? WHERE id = ?`).run(trimmedModule, req.params.id);
 
   if (currentMeeting.session_id) {
-    db.prepare(`UPDATE sessions SET module = ? WHERE id = ?`).run(trimmedModule, currentMeeting.session_id);
-    db.prepare(`UPDATE knowledge_objects SET module = ? WHERE session_id = ?`).run(trimmedModule, currentMeeting.session_id);
+    await db.prepare(`UPDATE sessions SET module = ? WHERE id = ?`).run(trimmedModule, currentMeeting.session_id);
+    await db.prepare(`UPDATE knowledge_objects SET module = ? WHERE session_id = ?`).run(trimmedModule, currentMeeting.session_id);
   }
 
   // Drop the old module if it's now unused within this engagement — keeps
   // the module list free of orphans left over from auto-classification.
   if (oldModule && oldModule !== trimmedModule && oldModule !== "Unclassified") {
-    const usage = db.prepare(`
+    const usage = await db.prepare(`
       SELECT
         (SELECT COUNT(*) FROM meetings WHERE module = ? AND engagement_id = ?) +
         (SELECT COUNT(*) FROM sessions WHERE module = ? AND engagement_id = ?) AS count
     `).get(oldModule, currentMeeting.engagement_id, oldModule, currentMeeting.engagement_id);
 
     if (usage.count === 0) {
-      db.prepare(`DELETE FROM modules WHERE name = ? AND engagement_id = ?`).run(oldModule, currentMeeting.engagement_id);
+      await db.prepare(`DELETE FROM modules WHERE name = ? AND engagement_id = ?`).run(oldModule, currentMeeting.engagement_id);
     }
   }
 
-  rebuildReadiness();
+  await rebuildReadiness();
 
   res.json({ success: true, module: trimmedModule });
 });
 
-router.delete("/:id", (req, res) => {
-  const meeting = getMeeting.get(req.params.id);
+router.delete("/:id", async (req, res) => {
+  const meeting = await getMeeting.get(req.params.id);
 
   if (!meeting) {
     return res.status(404).json({
@@ -442,47 +442,47 @@ router.delete("/:id", (req, res) => {
     });
   }
 
-  db.prepare(`
+  await db.prepare(`
     DELETE FROM meeting_transcript_chunks
     WHERE bot_id = ?
   `).run(meeting.bot_id);
 
   if (meeting.session_id) {
-    db.prepare(`
+    await db.prepare(`
       DELETE FROM transcript_segments
       WHERE session_id = ?
     `).run(meeting.session_id);
 
-    db.prepare(`
+    await db.prepare(`
       DELETE FROM knowledge_objects
       WHERE session_id = ?
     `).run(meeting.session_id);
 
-    db.prepare(`
+    await db.prepare(`
       DELETE FROM sessions
       WHERE id = ?
     `).run(meeting.session_id);
   }
 
-  db.prepare(`
+  await db.prepare(`
     DELETE FROM meetings
     WHERE id = ?
   `).run(meeting.id);
   if (meeting.module) {
-    const usage = db.prepare(`
+    const usage = await db.prepare(`
       SELECT
         (SELECT COUNT(*) FROM meetings WHERE module = ? AND engagement_id = ?) +
         (SELECT COUNT(*) FROM sessions WHERE module = ? AND engagement_id = ?) AS count
     `).get(meeting.module, meeting.engagement_id, meeting.module, meeting.engagement_id);
 
     if (usage.count === 0) {
-      db.prepare(`
+      await db.prepare(`
         DELETE FROM modules
         WHERE name = ? AND engagement_id = ?
       `).run(meeting.module, meeting.engagement_id);
     }
   }
-  rebuildReadiness();
+  await rebuildReadiness();
   res.json({ success: true });
 });
 

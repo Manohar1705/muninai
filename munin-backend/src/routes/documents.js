@@ -88,8 +88,8 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 
     const sessionId = `doc-${nanoid(8)}`;
     const now = new Date();
-    const primaryModule = knowledgeObjects[0]?.module || guessModule(trimmed, listModules(engagementId).map((m)=>m.name));
-    ensureModule(primaryModule, engagementId);
+    const primaryModule = knowledgeObjects[0]?.module || guessModule(trimmed, (await listModules(engagementId)).map((m)=>m.name));
+    await ensureModule(primaryModule, engagementId);
     
 
     const insertSession = db.prepare(
@@ -107,11 +107,11 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     );
     const insertActivity = db.prepare(`INSERT INTO activity (text, created_at, engagement_id) VALUES (@text, @created_at, @engagement_id)`);
 
-    const nextNumRow = db.prepare(`SELECT COALESCE(MAX(num), 0) + 1 AS n FROM sessions`).get();
+    const nextNumRow = await db.prepare(`SELECT COALESCE(MAX(num), 0) + 1 AS n FROM sessions`).get();
 
     const savedKOs = [];
-    const tx = db.transaction(() => {
-      insertSession.run({
+    const tx = db.transaction(async () => {
+      await insertSession.run({
         id: sessionId,
         num: nextNumRow.n,
         module: primaryModule,
@@ -124,11 +124,11 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         engagement_id: engagementId,
       });
 
-      insertSegment.run({ session_id: sessionId, seq: 0, timestamp: "00:00:00", speaker: "Document", text: trimmed });
+      await insertSegment.run({ session_id: sessionId, seq: 0, timestamp: "00:00:00", speaker: "Document", text: trimmed });
 
       for (const k of knowledgeObjects) {
         const koId = `ko-${nanoid(8)}`;
-        insertKO.run({
+        await insertKO.run({
           id: koId,
           title: k.title,
           type: k.type,
@@ -146,15 +146,15 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         savedKOs.push({ id: koId, ...k, needsReview: k.confidence < 0.6, source: `${req.file.originalname} (document upload)` });
       }
 
-      insertActivity.run({
+      await insertActivity.run({
         text: `Document "${req.file.originalname}" processed — ${knowledgeObjects.length} knowledge object(s) extracted.`,
         created_at: now.toISOString(),
         engagement_id: engagementId,
       });
     });
-    tx();
+    await tx();
 
-    const updatedReadiness = bumpReadinessForKnowledgeObjects(savedKOs);
+    const updatedReadiness = await bumpReadinessForKnowledgeObjects(savedKOs);
 
     res.json({
       session: { id: sessionId, num: nextNumRow.n, module: primaryModule, title: req.file.originalname, sourceType: "document" },

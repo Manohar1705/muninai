@@ -83,11 +83,11 @@ router.post("/upload", upload.single("file"), async (req, res) => {
     const sessionId = `rec-${nanoid(8)}`;
     const now = new Date();
 
-    const primaryModule = knowledgeObjects[0]?.module || guessModule(trimmed, listModules(engagementId).map((m)=>m.name));
+    const primaryModule = knowledgeObjects[0]?.module || guessModule(trimmed, (await listModules(engagementId)).map((m)=>m.name));
 
-    ensureModule(primaryModule, engagementId);
+    await ensureModule(primaryModule, engagementId);
     for (const k of knowledgeObjects) {
-      ensureModule(k.module, engagementId);
+      await ensureModule(k.module, engagementId);
     }
     const sourceLabel = `${req.file.originalname} (recording upload)`;
 
@@ -103,11 +103,11 @@ router.post("/upload", upload.single("file"), async (req, res) => {
        VALUES (@id, @title, @type, @module, @description, @confidence, @needs_review, @source, @session_id, @segment_timestamp, @speaker)`
     );
     const insertActivity = db.prepare(`INSERT INTO activity (text, created_at, engagement_id) VALUES (@text, @created_at, @engagement_id)`);
-    const nextNumRow = db.prepare(`SELECT COALESCE(MAX(num), 0) + 1 AS n FROM sessions`).get();
+    const nextNumRow = await db.prepare(`SELECT COALESCE(MAX(num), 0) + 1 AS n FROM sessions`).get();
 
     const savedKOs = [];
-    const tx = db.transaction(() => {
-      insertSession.run({
+    const tx = db.transaction(async () => {
+      await insertSession.run({
         id: sessionId,
         num: nextNumRow.n,
         module: primaryModule,
@@ -124,11 +124,11 @@ router.post("/upload", upload.single("file"), async (req, res) => {
       // per-speaker turns — there's no reliable signal to split this into a
       // real multi-speaker dialogue, so it's stored as a single segment
       // rather than fabricating fake speaker labels.
-      insertSegment.run({ session_id: sessionId, seq: 0, timestamp: "00:00:00", speaker: "Recording", text: trimmed });
+      await insertSegment.run({ session_id: sessionId, seq: 0, timestamp: "00:00:00", speaker: "Recording", text: trimmed });
 
       for (const k of knowledgeObjects) {
         const koId = `ko-${nanoid(8)}`;
-        insertKO.run({
+        await insertKO.run({
           id: koId,
           title: k.title,
           type: k.type,
@@ -146,15 +146,15 @@ router.post("/upload", upload.single("file"), async (req, res) => {
         savedKOs.push({ id: koId, ...k, needsReview: k.confidence < 0.6, source: sourceLabel });
       }
 
-      insertActivity.run({
+      await insertActivity.run({
         text: `Recording "${req.file.originalname}" transcribed and processed — ${knowledgeObjects.length} knowledge object(s) extracted.`,
         created_at: now.toISOString(),
         engagement_id: engagementId,
       });
     });
-    tx();
+    await tx();
 
-    const updatedReadiness = bumpReadinessForKnowledgeObjects(savedKOs);
+    const updatedReadiness = await bumpReadinessForKnowledgeObjects(savedKOs);
 
     res.json({
       session: { id: sessionId, num: nextNumRow.n, module: primaryModule, title: req.file.originalname, sourceType: "recording" },

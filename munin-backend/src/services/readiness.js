@@ -44,18 +44,17 @@ const { db } = require("../db");
 //   return updated;
 // }
 function bumpReadinessForKnowledgeObjects() {
-  rebuildReadiness();
-  return {};
+  return rebuildReadiness();
 }
-function rebuildReadiness() {
-  const modules = db.prepare(`
+async function rebuildReadiness() {
+  const modules = await db.prepare(`
     SELECT
       name,
       planned_sessions
     FROM modules
   `).all();
 
-  db.prepare(`
+  await db.prepare(`
     UPDATE readiness
     SET score = 0
   `).run();
@@ -65,7 +64,7 @@ function rebuildReadiness() {
       module.planned_sessions || 0
     );
 
-    const actual = db.prepare(`
+    const actual = (await db.prepare(`
       SELECT COUNT(*) AS count
       FROM sessions
       WHERE module = ?
@@ -73,7 +72,7 @@ function rebuildReadiness() {
         source_type = 'kt_session'
         OR source_type = 'meeting'
       )
-    `).get(module.name).count;
+    `).get(module.name)).count;
 
     const score =
       planned > 0
@@ -83,13 +82,14 @@ function rebuildReadiness() {
           )
         : 0;
 
-    db.prepare(`
-      INSERT OR IGNORE INTO readiness
+    await db.prepare(`
+      INSERT INTO readiness
       (module, score)
       VALUES (?, ?)
+      ON CONFLICT (module) DO NOTHING
     `).run(module.name, score);
 
-    db.prepare(`
+    await db.prepare(`
       UPDATE readiness
       SET score = ?
       WHERE module = ?
@@ -101,6 +101,7 @@ function rebuildReadiness() {
   }
 
   console.log("Readiness rebuilt");
+  return {};
 }
 
 module.exports = { bumpReadinessForKnowledgeObjects, rebuildReadiness };

@@ -5,26 +5,27 @@ const { db } = require("../db");
 // engagement in scope (e.g. chat.js, llm.js extraction prompts) — omitting
 // it returns modules across all engagements. Every write path requires an
 // engagementId, since a module always belongs to exactly one engagement.
-function listModules(engagementId) {
+async function listModules(engagementId) {
   const modules = engagementId
-    ? db.prepare(`
+    ? await db.prepare(`
         SELECT name, planned_sessions, engagement_id
         FROM modules
         WHERE engagement_id = ?
         ORDER BY created_at ASC
       `).all(engagementId)
-    : db.prepare(`
+    : await db.prepare(`
         SELECT name, planned_sessions, engagement_id
         FROM modules
         ORDER BY created_at ASC
       `).all();
 
-  return modules.map((module) => {
+  const withCounts = [];
+  for (const module of modules) {
     // Scoped by engagement_id, not just module name — module names aren't
     // globally unique (two engagements can each define "Onboarding"), so
     // without this a session in one engagement would get counted toward
     // another engagement's identically-named module.
-    const completedSessions = db.prepare(`
+    const completedSessions = (await db.prepare(`
       SELECT COUNT(*) AS count
       FROM sessions
       WHERE module = ?
@@ -33,16 +34,17 @@ function listModules(engagementId) {
         source_type = 'kt_session'
         OR source_type = 'meeting'
       )
-    `).get(module.name, module.engagement_id).count;
+    `).get(module.name, module.engagement_id)).count;
 
-    return {
+    withCounts.push({
       ...module,
       completed_sessions: completedSessions,
-    };
-  });
+    });
+  }
+  return withCounts;
 }
 
-function ensureModule(name, engagementId) {
+async function ensureModule(name, engagementId) {
   if (typeof name !== "string") return;
   if (!engagementId) return;
 
@@ -50,13 +52,14 @@ function ensureModule(name, engagementId) {
 
   if (!trimmed) return;
 
-  db.prepare(`
-    INSERT OR IGNORE INTO modules
+  await db.prepare(`
+    INSERT INTO modules
     (engagement_id, name, planned_sessions)
     VALUES (?, ?, 0)
+    ON CONFLICT (engagement_id, name) DO NOTHING
   `).run(engagementId, trimmed);
 
-  const readiness = db
+  const readiness = await db
     .prepare(`
       SELECT module
       FROM readiness
@@ -65,7 +68,7 @@ function ensureModule(name, engagementId) {
     .get(trimmed);
 
   if (!readiness) {
-    db.prepare(`
+    await db.prepare(`
       INSERT INTO readiness
       (module, score)
       VALUES (?, 0)
@@ -73,8 +76,8 @@ function ensureModule(name, engagementId) {
   }
 }
 
-function updatePlannedSessions(engagementId, name, plannedSessions) {
-  const completed = db.prepare(`
+async function updatePlannedSessions(engagementId, name, plannedSessions) {
+  const completed = (await db.prepare(`
     SELECT COUNT(*) AS count
     FROM sessions
     WHERE module = ?
@@ -83,7 +86,7 @@ function updatePlannedSessions(engagementId, name, plannedSessions) {
       source_type = 'kt_session'
       OR source_type = 'meeting'
     )
-  `).get(name, engagementId).count;
+  `).get(name, engagementId)).count;
 
   if (plannedSessions < completed) {
     throw new Error(
@@ -91,7 +94,7 @@ function updatePlannedSessions(engagementId, name, plannedSessions) {
     );
   }
 
-  const result = db.prepare(`
+  const result = await db.prepare(`
     UPDATE modules
     SET planned_sessions = ?
     WHERE name = ? AND engagement_id = ?
@@ -108,31 +111,31 @@ function updatePlannedSessions(engagementId, name, plannedSessions) {
 // topics/gaps). Those tables aren't engagement-scoped themselves, so this
 // mirrors the same "rename by name" behavior already used by the session and
 // meeting module-reassignment endpoints.
-function renameModule(engagementId, oldName, newName) {
+async function renameModule(engagementId, oldName, newName) {
   if (!engagementId) throw new Error("engagementId is required.");
   const trimmedNew = (newName || "").trim();
   if (!trimmedNew) throw new Error("New module name is required.");
 
-  const existing = db.prepare(`SELECT name FROM modules WHERE engagement_id = ? AND name = ?`).get(engagementId, oldName);
+  const existing = await db.prepare(`SELECT name FROM modules WHERE engagement_id = ? AND name = ?`).get(engagementId, oldName);
   if (!existing) throw new Error(`Module "${oldName}" was not found in this engagement.`);
 
   if (trimmedNew === oldName) return;
 
-  const clash = db.prepare(`SELECT name FROM modules WHERE engagement_id = ? AND name = ?`).get(engagementId, trimmedNew);
+  const clash = await db.prepare(`SELECT name FROM modules WHERE engagement_id = ? AND name = ?`).get(engagementId, trimmedNew);
   if (clash) throw new Error(`A module named "${trimmedNew}" already exists in this engagement.`);
 
-  const tx = db.transaction(() => {
-    db.prepare(`UPDATE modules SET name = ? WHERE engagement_id = ? AND name = ?`).run(trimmedNew, engagementId, oldName);
-    db.prepare(`UPDATE sessions SET module = ? WHERE module = ? AND engagement_id = ?`).run(trimmedNew, oldName, engagementId);
-    db.prepare(`UPDATE meetings SET module = ? WHERE module = ? AND engagement_id = ?`).run(trimmedNew, oldName, engagementId);
-    db.prepare(`UPDATE knowledge_objects SET module = ? WHERE module = ?`).run(trimmedNew, oldName);
-    db.prepare(`UPDATE kt_topics SET module = ? WHERE module = ?`).run(trimmedNew, oldName);
-    db.prepare(`UPDATE gaps SET module = ? WHERE module = ?`).run(trimmedNew, oldName);
-    db.prepare(`UPDATE sme_contributions SET module = ? WHERE module = ?`).run(trimmedNew, oldName);
-    db.prepare(`UPDATE key_person_risk SET module = ? WHERE module = ?`).run(trimmedNew, oldName);
-    db.prepare(`UPDATE readiness SET module = ? WHERE module = ?`).run(trimmedNew, oldName);
+  const tx = db.transaction(async () => {
+    await db.prepare(`UPDATE modules SET name = ? WHERE engagement_id = ? AND name = ?`).run(trimmedNew, engagementId, oldName);
+    await db.prepare(`UPDATE sessions SET module = ? WHERE module = ? AND engagement_id = ?`).run(trimmedNew, oldName, engagementId);
+    await db.prepare(`UPDATE meetings SET module = ? WHERE module = ? AND engagement_id = ?`).run(trimmedNew, oldName, engagementId);
+    await db.prepare(`UPDATE knowledge_objects SET module = ? WHERE module = ?`).run(trimmedNew, oldName);
+    await db.prepare(`UPDATE kt_topics SET module = ? WHERE module = ?`).run(trimmedNew, oldName);
+    await db.prepare(`UPDATE gaps SET module = ? WHERE module = ?`).run(trimmedNew, oldName);
+    await db.prepare(`UPDATE sme_contributions SET module = ? WHERE module = ?`).run(trimmedNew, oldName);
+    await db.prepare(`UPDATE key_person_risk SET module = ? WHERE module = ?`).run(trimmedNew, oldName);
+    await db.prepare(`UPDATE readiness SET module = ? WHERE module = ?`).run(trimmedNew, oldName);
   });
-  tx();
+  await tx();
 }
 
 // Deletes a module outright — only when nothing has actually been
@@ -141,13 +144,13 @@ function renameModule(engagementId, oldName, newName) {
 // that only counts kt_session/meeting sessions, but a module could also
 // have document/recording sessions under it, and deleting the module row
 // shouldn't silently orphan those from the module list.
-function deleteModule(engagementId, name) {
+async function deleteModule(engagementId, name) {
   if (!engagementId) throw new Error("engagementId is required.");
 
-  const existing = db.prepare(`SELECT name FROM modules WHERE engagement_id = ? AND name = ?`).get(engagementId, name);
+  const existing = await db.prepare(`SELECT name FROM modules WHERE engagement_id = ? AND name = ?`).get(engagementId, name);
   if (!existing) throw new Error(`Module "${name}" was not found in this engagement.`);
 
-  const usage = db.prepare(`
+  const usage = await db.prepare(`
     SELECT
       (SELECT COUNT(*) FROM sessions WHERE module = ? AND engagement_id = ?) +
       (SELECT COUNT(*) FROM meetings WHERE module = ? AND engagement_id = ?) AS count
@@ -157,7 +160,7 @@ function deleteModule(engagementId, name) {
     throw new Error(`Cannot delete "${name}" — ${usage.count} session(s)/meeting(s) are already classified under it. Reclassify them first.`);
   }
 
-  db.prepare(`DELETE FROM modules WHERE engagement_id = ? AND name = ?`).run(engagementId, name);
+  await db.prepare(`DELETE FROM modules WHERE engagement_id = ? AND name = ?`).run(engagementId, name);
 }
 
 module.exports = {
