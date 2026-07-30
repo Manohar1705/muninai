@@ -10,7 +10,7 @@ Text:
 """
 
 Respond with ONLY a raw JSON object (no markdown fences, no preamble) in exactly this shape:
-{"objects": [{"title": string, "description": string, "type": string, "module": string, "confidence": number, "speaker": string|null}]}
+{"objects": [{"title": string, "description": string, "type": string, "module": string, "moduleConfidence": number, "confidence": number, "speaker": string|null}]}
 
 Rules:
 - "title": short (max 8 words), specific.
@@ -22,20 +22,11 @@ Known existing modules for this engagement (from sessions and manually planned m
 {{VALID_MODULES}}
 
 Rules for module:
-- FIRST check if the topic reasonably matches one of the known existing modules listed above — if so, reuse that exact module name, word-for-word, even if the source doesn't use the exact same phrasing.
-- Only if none of the known existing modules genuinely fit the topic, create a new short, specific module name based on the actual subject.
-- Prefer the real topic being discussed.
-- Use specific names rather than broad categories.
-- Preserve meaningful topic names from the source.
-
-Examples:
-- Football discussion -> "football"
-- Cricket discussion -> "cricket"
-- BTech experiences -> "btech life"
-- Event frequency discussion -> "Event Frequency"
-- Hackathon planning -> "Hackathon Event"
-- Azure deployment discussion -> "Azure Deployment"
-- Authentication flow discussion -> "Authentication Flow"
+- You MUST choose one exact module name, word-for-word, from the known existing modules listed above.
+- Never create, suggest, or paraphrase a new module name.
+- If none of the listed modules reasonably fits the source, use "Unclassified".
+- If the source has substantial topic drift from every listed module, use "Unclassified".
+- "moduleConfidence": a number from 0 to 1 indicating confidence that the source belongs to the selected existing module. Use a value below 0.65 for a weak or forced match. When module is "Unclassified", moduleConfidence must be below 0.65.
 
 Do NOT:
 - Use a person's name as a module.
@@ -59,14 +50,6 @@ Rules for "speaker":
 - If the text has no speaker labels at all (e.g. a plain document), always set "speaker" to null.
 - Never invent a speaker name that doesn't literally appear in the text.
 
-Prefer:
-- football instead of Sports Overview
-- cricket instead of Sports Overview
-- btech life instead of Education Overview
-- infrastructure instead of Technical Infrastructure
-- event frequency instead of Event Management
-
-The module should represent the actual topic discussed, not a high-level category.
 - "confidence": a number from 0 to 1 reflecting how clearly the source supports this object.
 - If the text contains no extractable knowledge, return {"objects": []}.
 - Extract at most 12 objects. Prefer fewer, higher-quality objects over many trivial ones.

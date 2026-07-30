@@ -2,6 +2,7 @@ const express = require("express");
 const { db } = require("../db");
 const { SESSION_9, KNOWLEDGE_OBJECTS_SEED } = require("../data/seedData");
 const { ensureModule, listModules } = require("../services/modules");
+const { validateSessionTitle } = require("../services/sessionTitles");
 const router = express.Router();
 
 function serializeSession(row) {
@@ -133,6 +134,31 @@ router.post("/upload", async (req, res) => {
     newKnowledgeObjects: newKOs.map((k) => ({ ...k })),
     updatedReadiness: { "Customer Notifications": readinessRow.score },
     closedGapId: "g9",
+  });
+});
+
+// PATCH /api/sessions/:id/title — renames a session without changing its
+// transcript, extracted knowledge, or module classification.
+router.patch("/:id/title", async (req, res) => {
+  const validated = validateSessionTitle(req.body?.title);
+  if (validated.error) {
+    return res.status(400).json({ error: validated.error });
+  }
+
+  const result = await db
+    .prepare(`UPDATE sessions SET title = ? WHERE id = ?`)
+    .run(validated.title, req.params.id);
+
+  if (result.changes === 0) {
+    return res.status(404).json({ error: "Session not found" });
+  }
+
+  res.json({
+    success: true,
+    session: {
+      id: req.params.id,
+      title: validated.title,
+    },
   });
 });
 

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { engagementApi } from "../api";
+import { getPlanValidationError } from "../modulePlanning";
 import { invalidateEngagementScopedQueries } from "../../../shared/api/client";
 
 export function useEngagementSetup(engagementId) {
@@ -58,15 +59,22 @@ export function useEngagementSetup(engagementId) {
   };
 
   const updatePlan = async (moduleName, value) => {
-    const next = Number(value || 0);
+    const currentModule = modules.find((module) => module.name === moduleName);
+    const validationError = getPlanValidationError(
+      value,
+      currentModule?.completed_sessions || 0
+    );
+    if (validationError) throw new Error(validationError);
+
+    const next = Number(value);
     try {
       await engagementApi.updateModulePlan(moduleName, next, engagementId);
       invalidate();
-      refetchModules();
+      await refetchModules();
     } catch (err) {
       console.error(err);
-      alert(err.message || "Planned sessions cannot be less than completed sessions.");
-      refetchModules();
+      await refetchModules();
+      throw err;
     }
   };
 

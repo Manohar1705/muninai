@@ -7,6 +7,7 @@ import {
   icons,
   btnGhost,
 } from "../../../shared/components/common";
+import { getPlanValidationError } from "../modulePlanning";
 
 // Modules are the source of truth for session classification: every KT
 // session and meeting is filed under exactly one of the modules defined
@@ -17,10 +18,18 @@ function ModuleRow({ module, onRename, onPlanChange, onDelete }) {
   const [nameDraft, setNameDraft] = useState(module.name);
   const [renaming, setRenaming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [planDraft, setPlanDraft] = useState(String(module.planned_sessions ?? 0));
+  const [planError, setPlanError] = useState(null);
+  const [savingPlan, setSavingPlan] = useState(false);
 
   const canDelete = !module.completed_sessions;
+  const planErrorId = `module-plan-error-${module.name.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
 
   useEffect(() => { setNameDraft(module.name); }, [module.name]);
+  useEffect(() => {
+    setPlanDraft(String(module.planned_sessions ?? 0));
+    setPlanError(null);
+  }, [module.planned_sessions]);
 
   const inputStyle = {
     background: C.bgRaised,
@@ -49,6 +58,33 @@ function ModuleRow({ module, onRename, onPlanChange, onDelete }) {
       setNameDraft(module.name);
     } finally {
       setRenaming(false);
+    }
+  };
+
+  const updatePlanDraft = (value) => {
+    setPlanDraft(value);
+    setPlanError(getPlanValidationError(value, module.completed_sessions));
+  };
+
+  const commitPlan = async () => {
+    const error = getPlanValidationError(planDraft, module.completed_sessions);
+    if (error) {
+      setPlanError(error);
+      return;
+    }
+
+    const next = Number(planDraft);
+    if (next === Number(module.planned_sessions || 0)) return;
+
+    setSavingPlan(true);
+    setPlanError(null);
+    try {
+      await onPlanChange(module.name, next);
+    } catch (err) {
+      console.error(err);
+      setPlanError(err.message || "Failed to update planned sessions.");
+    } finally {
+      setSavingPlan(false);
     }
   };
 
@@ -93,13 +129,47 @@ function ModuleRow({ module, onRename, onPlanChange, onDelete }) {
         </div>
       )}
 
-      <input
-        type="number"
-        min={module.completed_sessions || 0}
-        value={module.planned_sessions}
-        onChange={(e) => onPlanChange(module.name, e.target.value)}
-        style={inputStyle}
-      />
+      <div>
+        <input
+          type="number"
+          min={module.completed_sessions || 0}
+          step="1"
+          value={planDraft}
+          disabled={savingPlan}
+          aria-invalid={Boolean(planError)}
+          aria-describedby={planError ? planErrorId : undefined}
+          onChange={(e) => updatePlanDraft(e.target.value)}
+          onBlur={commitPlan}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+            if (e.key === "Escape") {
+              setPlanDraft(String(module.planned_sessions ?? 0));
+              setPlanError(null);
+            }
+          }}
+          style={{
+            ...inputStyle,
+            width: "100%",
+            borderColor: planError ? C.red : C.border,
+            background: planError ? "rgba(196,104,90,0.08)" : C.bgRaised,
+            outline: "none",
+          }}
+        />
+        {planError && (
+          <div
+            id={planErrorId}
+            role="alert"
+            style={{
+              color: C.red,
+              fontSize: 10.5,
+              lineHeight: 1.35,
+              marginTop: 5,
+            }}
+          >
+            {planError}
+          </div>
+        )}
+      </div>
       <div style={{ display: "flex", alignItems: "center", color: C.text, fontFamily: FF.mono }}>
         {module.completed_sessions}
       </div>

@@ -1,6 +1,11 @@
 const fs = require("fs");
 const path = require("path");
-const { tokenize, guessModule } = require("./keywordMatch");
+const {
+  MODULE_MATCH_MIN_CONFIDENCE,
+  UNCLASSIFIED_MODULE,
+  normalizeKnownModule,
+  tokenize,
+} = require("./keywordMatch");
 const { traceLlmCall } = require("./observability");
 const {listModules} = require("./modules");
 // const { MODULES } = require("../data/seedData");
@@ -22,8 +27,6 @@ function isLlmConfigured() {
 }
 
 
-// const VALID_MODULES = [...MODULES, "Unclassified"];
-
 const extractionPromptTemplate = fs.readFileSync(
   path.join(__dirname, "../prompts/extractionPrompt.txt"),
   "utf8"
@@ -33,13 +36,6 @@ const systemPromptTemplate = fs.readFileSync(
   path.join(__dirname, "../prompts/systemPrompt.txt"),
   "utf8"
 );
-function sanitizeModule(raw) {
-  if (typeof raw !== "string") return null;
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-  if (/^(unclassified|n\/a|none|unknown|general)$/i.test(trimmed)) return null;
-  return trimmed.slice(0,60);
-}
 async function buildExtractionPrompt(text, sourceLabel, engagementId) {
   const knownModules = await listModules(engagementId);
   return extractionPromptTemplate
@@ -99,22 +95,32 @@ async function extractKnowledgeFromText(text, sourceLabel, engagementId) {
 
     const objects = Array.isArray(parsed.objects) ? parsed.objects : [];
 
-    // Defensive normalization — never trust the model's output shape blindly.
+    // The prompt asks for an existing module, but persistence must not trust
+    // the model to obey it. Invented and low-confidence labels are rejected.
     return objects
       .filter((o) => o && typeof o.title === "string" && typeof o.description === "string")
-      .map((o) => ({
-        title: o.title.slice(0, 200),
-        description: o.description.slice(0, 2000),
-        type: typeof o.type === "string" ? o.type : "Other",
-        // module: VALID_MODULES.includes(o.module) ? o.module : guessModule(`${o.title} ${o.description}`),
-        module: sanitizeModule(o.module) || guessModule(`${o.title} ${o.description}`, knownModuleNames),
-        confidence: typeof o.confidence === "number" ? Math.max(0, Math.min(1, o.confidence)) : 0.5,
-        // Raw, unverified — the LLM can hallucinate a name. Callers that
-        // actually persist this (meetingProcessor.js) must cross-check it
-        // against the real speakers present in that transcript before
-        // trusting it for attribution.
-        speaker: typeof o.speaker === "string" && o.speaker.trim() ? o.speaker.trim().slice(0, 100) : null,
-      }));
+      .map((o) => {
+        const exactModule = normalizeKnownModule(o.module, knownModuleNames);
+        const moduleConfidence = typeof o.moduleConfidence === "number"
+          ? Math.max(0, Math.min(1, o.moduleConfidence))
+          : 0;
+
+        return {
+          title: o.title.slice(0, 200),
+          description: o.description.slice(0, 2000),
+          type: typeof o.type === "string" ? o.type : "Other",
+          module: exactModule && moduleConfidence >= MODULE_MATCH_MIN_CONFIDENCE
+            ? exactModule
+            : UNCLASSIFIED_MODULE,
+          moduleConfidence,
+          confidence: typeof o.confidence === "number" ? Math.max(0, Math.min(1, o.confidence)) : 0.5,
+          // Raw, unverified — the LLM can hallucinate a name. Callers that
+          // actually persist this (meetingProcessor.js) must cross-check it
+          // against the real speakers present in that transcript before
+          // trusting it for attribution.
+          speaker: typeof o.speaker === "string" && o.speaker.trim() ? o.speaker.trim().slice(0, 100) : null,
+        };
+      });
   });
 }
 

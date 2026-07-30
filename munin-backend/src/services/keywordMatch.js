@@ -6,6 +6,9 @@ const STOPWORDS = new Set([
   "will", "can", "should", "there", "with", "this", "that", "be", "have",
 ]);
 
+const UNCLASSIFIED_MODULE = "Unclassified";
+const MODULE_MATCH_MIN_CONFIDENCE = 0.65;
+
 function tokenize(text) {
   return text
     .toLowerCase()
@@ -48,7 +51,7 @@ function findBestMatch(question, knowledgeObjects) {
 
 function guessModule(text, knownModules = []) {
   if (!knownModules.length) {
-    return "Unclassified";
+    return UNCLASSIFIED_MODULE;
   }
 
   const qLower = text.toLowerCase();
@@ -61,6 +64,48 @@ function guessModule(text, knownModules = []) {
     return found;
   }
 
-  return "Unclassified";
+  return UNCLASSIFIED_MODULE;
 }
-module.exports = { tokenize, findBestMatch, guessModule };
+
+function normalizeKnownModule(raw, knownModules = []) {
+  if (typeof raw !== "string") return null;
+  const candidate = raw.trim().toLowerCase();
+  if (!candidate || candidate === UNCLASSIFIED_MODULE.toLowerCase()) return null;
+  return knownModules.find((name) => name.toLowerCase() === candidate) || null;
+}
+
+function selectBestKnownModule(knowledgeObjects = [], knownModules = []) {
+  const scores = new Map();
+
+  for (const object of knowledgeObjects) {
+    const module = normalizeKnownModule(object?.module, knownModules);
+    if (!module) continue;
+
+    const confidence = typeof object.moduleConfidence === "number"
+      ? Math.max(0, Math.min(1, object.moduleConfidence))
+      : 0;
+    if (confidence < MODULE_MATCH_MIN_CONFIDENCE) continue;
+
+    scores.set(module, (scores.get(module) || 0) + confidence);
+  }
+
+  let bestModule = UNCLASSIFIED_MODULE;
+  let bestScore = 0;
+  for (const [module, score] of scores) {
+    if (score > bestScore) {
+      bestModule = module;
+      bestScore = score;
+    }
+  }
+  return bestModule;
+}
+
+module.exports = {
+  MODULE_MATCH_MIN_CONFIDENCE,
+  UNCLASSIFIED_MODULE,
+  tokenize,
+  findBestMatch,
+  guessModule,
+  normalizeKnownModule,
+  selectBestKnownModule,
+};

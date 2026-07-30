@@ -7,8 +7,12 @@ const { nanoid } = require("nanoid");
 const { db } = require("../db");
 const { isGroqConfigured, extractKnowledgeFromText } = require("../services/llm");
 const { bumpReadinessForKnowledgeObjects } = require("../services/readiness");
-const { guessModule } = require("../services/keywordMatch");
-const {ensureModule, listModules} = require("../services/modules");
+const {
+  UNCLASSIFIED_MODULE,
+  guessModule,
+  selectBestKnownModule,
+} = require("../services/keywordMatch");
+const { listModules } = require("../services/modules");
 
 const router = express.Router();
 
@@ -88,8 +92,11 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 
     const sessionId = `doc-${nanoid(8)}`;
     const now = new Date();
-    const primaryModule = knowledgeObjects[0]?.module || guessModule(trimmed, (await listModules(engagementId)).map((m)=>m.name));
-    await ensureModule(primaryModule, engagementId);
+    const knownModuleNames = (await listModules(engagementId)).map((m) => m.name);
+    const wordMatch = guessModule(trimmed, knownModuleNames);
+    const primaryModule = wordMatch !== UNCLASSIFIED_MODULE
+      ? wordMatch
+      : selectBestKnownModule(knowledgeObjects, knownModuleNames);
     
 
     const insertSession = db.prepare(

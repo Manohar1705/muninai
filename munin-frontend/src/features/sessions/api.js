@@ -9,10 +9,16 @@ export const sessionsApi = {
     ),
 
   getSession: (id) =>
-    apiRequest(`/sessions/${id}`),
+    apiRequest(`/sessions/${encodeURIComponent(id)}`),
+
+  updateSessionTitle: (id, title) =>
+    apiRequest(`/sessions/${encodeURIComponent(id)}/title`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    }),
 
   updateSessionModule: (id, module) =>
-    apiRequest(`/sessions/${id}/module`, {
+    apiRequest(`/sessions/${encodeURIComponent(id)}/module`, {
       method: "PATCH",
       body: JSON.stringify({ module }),
     }),

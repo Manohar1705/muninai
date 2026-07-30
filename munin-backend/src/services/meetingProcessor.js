@@ -20,8 +20,11 @@ const { nanoid } = require("nanoid");
 const { db } = require("../db");
 const { isGroqConfigured, extractKnowledgeFromText } = require("./llm");
 const { bumpReadinessForKnowledgeObjects } = require("./readiness");
-const { guessModule } = require("./keywordMatch");
-const { listModules, ensureModule } = require("./modules");
+const {
+  selectBestKnownModule,
+  UNCLASSIFIED_MODULE,
+} = require("./keywordMatch");
+const { listModules } = require("./modules");
 
 const TERMINAL_STATUSES = new Set(["call_ended", "done"]);
 function isTerminalStatus(status) {
@@ -155,22 +158,11 @@ async function processMeetingChunks(meetingId, { finalize = false } = {}) {
   // from whatever the latest chunk happens to contain — it only keeps
   // trying while the meeting is still sitting in "Unclassified".
   let meetingTopic = meeting.module;
-  if (!meetingTopic || meetingTopic === "Unclassified") {
-    // 1st: cheap word-match against existing modules (includes both modules
-    // with completed sessions AND manually-added ones from Engagement Setup
-    // — listModules() already returns both together as one list).
+  if (!meetingTopic || meetingTopic === UNCLASSIFIED_MODULE) {
+    // listModules() is the engagement's authoritative allowlist. Extraction
+    // may select one of these exact names, but can never extend the list.
     const knownModuleNames = (await listModules(meeting.engagement_id)).map((m) => m.name);
-    const wordMatch = guessModule(transcriptText, knownModuleNames);
-
-    if (wordMatch !== "Unclassified") {
-      meetingTopic = wordMatch;
-    } else {
-      // 2nd: only when the word-match found nothing, fall back to the AI's
-      // own module choice for this chunk (it already checks existing
-      // modules first internally, per the updated extraction prompt).
-      meetingTopic = knowledgeObjects[0]?.module || "Unclassified";
-      await ensureModule(meetingTopic, meeting.engagement_id);
-    }
+    meetingTopic = selectBestKnownModule(knowledgeObjects, knownModuleNames);
   }
   await db.prepare(`
     UPDATE meetings

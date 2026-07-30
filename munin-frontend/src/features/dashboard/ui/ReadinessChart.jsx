@@ -48,6 +48,17 @@ function ReadinessChart({ readiness }) {
     .sort((a, b) => b.value - a.value);
 
   const PAGE_SIZE = 15;
+  // Recharts clips category ticks to the Y-axis width. Reserve enough room
+  // for the longest module on every page so names do not lose their leading
+  // characters or make the plot jump when pagination changes.
+  const longestModuleName = data.reduce(
+    (longest, item) => Math.max(longest, item.module.length),
+    0
+  );
+  const yAxisWidth = Math.min(
+    240,
+    Math.max(170, Math.ceil(longestModuleName * 4 + 24))
+  );
 
   const pagedData = data.slice(
     page * PAGE_SIZE,
@@ -60,7 +71,7 @@ function ReadinessChart({ readiness }) {
         <BarChart
           data={pagedData}
           layout="vertical"
-          margin={{ left: 4, right: 48, top: 4, bottom: 4 }}
+          margin={{ left: 12, right: 48, top: 4, bottom: 4 }}
         >
           <CartesianGrid
             strokeDasharray="3 3"
@@ -83,7 +94,8 @@ function ReadinessChart({ readiness }) {
           <YAxis
             type="category"
             dataKey="module"
-            width={122}
+            width={yAxisWidth}
+            interval={0}
             tick={{
               fill: C.textMuted,
               fontSize: 12.5,

@@ -1,4 +1,4 @@
-import { apiRequest } from "../../shared/api/client";
+import { apiRequest, apiRequestSoft } from "../../shared/api/client";
 
 export const engagementApi = {
   engagements: () =>
@@ -44,18 +44,24 @@ export const engagementApi = {
       }),
     }),
 
-  updateModulePlan: (
+  updateModulePlan: async (
     name,
     plannedSessions,
     engagementId
-  ) =>
-    apiRequest(`/modules/${encodeURIComponent(name)}`, {
+  ) => {
+    const response = await apiRequestSoft(`/modules/${encodeURIComponent(name)}`, {
       method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         plannedSessions,
         engagementId,
       }),
-    }),
+    });
+    if (!response.ok) {
+      throw new Error(response.data?.error || "Failed to update planned sessions.");
+    }
+    return response.data;
+  },
 
   renameModule: (
     name,

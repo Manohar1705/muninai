@@ -131,6 +131,8 @@ function Sessions({ engagementId }) {
               s={{ ...s, displayNum: index + 1 }}
               moduleOptions={modules}
               onClick={() => openSession(s.id)}
+              onTitleChange={(id, title) => setSessions((prev) => prev.map((sess) => (sess.id === id ? { ...sess, title } : sess)))}
+              onTitleChanged={() => invalidateEngagementScopedQueries(queryClient, engagementId)}
               onModuleChange={(id, newModule) => setSessions((prev) => prev.map((sess) => (sess.id === id ? { ...sess, module: newModule } : sess)))}
               onModuleChanged={() => invalidateEngagementScopedQueries(queryClient, engagementId)}
             />
