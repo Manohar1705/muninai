@@ -58,9 +58,17 @@ function AskMunin({ engagementId }) {
       },
     });
   };
-  const endRef = useRef(null);
+  const messagesContainerRef = useRef(null);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [activeId, messages.length]);
 
   const send = async () => {
     const q = input.trim();
@@ -104,7 +112,10 @@ function AskMunin({ engagementId }) {
         </Section>
 
         <Card style={{ flex: 1, padding: "18px 20px", display: "flex", flexDirection: "column", minHeight: 0 }}>
-          <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}>
+          <div
+            ref={messagesContainerRef}
+            style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}
+          >
             {loadingHistory && <div style={{ fontSize: 12.5, color: C.textFaint }}>Loading conversation…</div>}
             {!loadingHistory && messages.length === 0 && (
               <div style={{ fontSize: 12.5, color: C.textFaint }}>Ask a question about the knowledge transfer — e.g. "How does the batch settlement retry work?"</div>
@@ -129,7 +140,6 @@ function AskMunin({ engagementId }) {
                 )}
               </div>
             ))}
-            <div ref={endRef} />
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
