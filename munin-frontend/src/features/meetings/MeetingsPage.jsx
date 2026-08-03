@@ -171,7 +171,15 @@ function Meetings({ configStatus, engagementId}) {
                             marginTop: 4,
                           }}
                         >
-                          {m.createdAt?.split(" ")[0]}
+          
+                          {m.createdAt?.split("T")[0]}
+                            {m.createdAt
+                              ? ` ${new Date(m.createdAt).toLocaleTimeString("en-IN", {
+                                  timeZone: "Asia/Kolkata",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}`
+                              : ""}
                           {durationText ? ` · ${durationText}` : ""}
                           {participants.length
                             ? ` · ${participants.length} Participant${participants.length > 1 ? "s" : ""}`
