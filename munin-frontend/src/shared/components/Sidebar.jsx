@@ -22,7 +22,7 @@ function Sidebar({ onSwitchEngagement }) {
     { id: "sme", label: "SME map", icon: icons.sme },
     { id: "chat", label: "Ask Munin", icon: icons.chat },
     { id: "engagementSetup", label: "Engagement Setup", icon: icons.settings },
-    { id: "llmInsights", label: "LLM Insights", icon: icons.coverage },
+    { id: "llmInsights", label: "LLM Insights", icon: icons.clock },
   ];
   const routeMap = {
     dashboard: "/dashboard",
