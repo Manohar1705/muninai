@@ -36,9 +36,7 @@ export default function TraceabilityPage() {
   return (
     <div style={{ padding: 32, fontFamily: "sans-serif" }}>
       <h2>LLM Traceability</h2>
-      <div style={{ marginBottom: 16, fontSize: 12.5, color: "#888" }}>
-        {loading ? "Updating…" : "Auto-refreshing every 15s"}
-      </div>
+     
       {error && <div style={{ color: "red" }}>{error}</div>}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>
