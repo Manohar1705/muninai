@@ -6,6 +6,7 @@ const {
   normalizeKnownModule,
 } = require("./keywordMatch");
 const { traceLlmCall } = require("../observability");
+const { judgeAskMuninAnswer } = require("./judge");
 const { groundLlmResult, shortlistCandidates } = require("./chatRetrieval");
 const {listModules} = require("../modules");
 // const { MODULES } = require("../data/seedData");
@@ -53,7 +54,7 @@ async function extractKnowledgeFromText(text, sourceLabel, engagementId) {
   const knownModuleNames = (await listModules(engagementId)).map((m) => m.name);
   const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
-  return traceLlmCall({ name: "extract-knowledge", input: prompt, metadata: { model, sourceLabel } }, async () => {
+  return traceLlmCall({ name: "extract-knowledge", input: prompt, metadata: { model, sourceLabel } }, async (reportUsage) => {
     const response = await fetch(GROQ_API_URL, {
       method: "POST",
       headers: {
@@ -75,6 +76,7 @@ async function extractKnowledgeFromText(text, sourceLabel, engagementId) {
     }
 
     const data = await response.json();
+    reportUsage(data.usage);
     const raw = data.choices?.[0]?.message?.content || "";
     const cleaned = raw.replace(/^```json/i, "").replace(/```$/, "").trim();
 
@@ -271,7 +273,7 @@ async function askLlm(question, knowledgeObjects, history = [], dbContext = {}, 
     content: h.text,
   }));
  
-  return traceLlmCall({ name: "ask-munin", input: question, metadata: { model, candidateCount: candidates.length, historyTurns: history.length } }, async () => {
+  return traceLlmCall({ name: "ask-munin", input: question, metadata: { model, candidateCount: candidates.length, historyTurns: history.length } }, async (reportUsage, traceId) => {
     const response = await fetch(GROQ_API_URL, {
       method: "POST",
       headers: {
@@ -297,6 +299,7 @@ async function askLlm(question, knowledgeObjects, history = [], dbContext = {}, 
     }
  
     const data = await response.json();
+    reportUsage(data.usage);
     const text = (data.choices?.[0]?.message?.content || "").trim();
  
     const cleaned = text.replace(/^```json/i, "").replace(/```$/, "").trim();
@@ -312,7 +315,13 @@ async function askLlm(question, knowledgeObjects, history = [], dbContext = {}, 
       };
     }
  
-    return groundLlmResult(parsed, candidates);
+    const grounded = groundLlmResult(parsed, candidates);
+
+    // Fire-and-forget — never awaited, so a slow/failed judge call can't
+    // delay or break the user's actual answer.
+    judgeAskMuninAnswer({ traceId, question, answer: grounded?.answer }).catch(() => {});
+
+    return grounded;
   });
 }
 
@@ -334,11 +343,11 @@ async function transcribeAudio(buffer, filename) {
 
   const model = process.env.GROQ_WHISPER_MODEL || "whisper-large-v3-turbo";
 
-  return traceLlmCall({ name: "transcribe-audio", input: `[audio file: ${filename}, ${buffer.length} bytes]`, metadata: { model, filename } }, async () => {
+  return traceLlmCall({ name: "transcribe-audio", input: `[audio file: ${filename}, ${buffer.length} bytes]`, metadata: { model, filename } }, async (reportUsage) => {
     const form = new FormData();
     form.append("file", new Blob([buffer]), filename);
     form.append("model", model);
-    form.append("response_format", "text");
+    form.append("response_format", "verbose_json");
 
     const response = await fetch(GROQ_TRANSCRIPTION_URL, {
       method: "POST",
@@ -351,8 +360,12 @@ async function transcribeAudio(buffer, filename) {
       throw new Error(`Groq transcription error ${response.status}: ${errText}`);
     }
 
-    // response_format: "text" returns the raw transcript as plain text, not JSON.
-    return response.text();
+    // verbose_json includes { text, duration, ... } — duration is in
+    // seconds. We report it as "seconds" (not a token count) so
+    // observability.js can pass it through to Langfuse as-is.
+    const data = await response.json();
+    reportUsage({ seconds: Math.round(data.duration) });
+    return data.text;
   });
 }
 

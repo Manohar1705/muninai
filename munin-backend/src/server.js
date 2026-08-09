@@ -21,7 +21,7 @@ const meetingsRoutes = require("./routes/meetings");
 const mediaRoutes = require("./routes/media");
 const engagementsRoutes = require("./routes/engagements");
 const modulesRoutes = require("./routes/modules");
-
+const traceabilityRoutes = require("./routes/traceability");
 const app = express();
 const clients = new Set();
 let httpServer;
@@ -68,6 +68,7 @@ app.use("/api/meetings", meetingsRoutes);
 app.use("/api/media", mediaRoutes);
 app.use("/api/engagements", engagementsRoutes);
 app.use("/api/modules", modulesRoutes);
+app.use("/api/traceability", traceabilityRoutes);
 app.use(notFound);
 app.use(errorHandler);
 

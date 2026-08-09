@@ -45,7 +45,7 @@ function getClient() {
  */
 async function traceLlmCall({ name, input, metadata }, fn) {
   const lf = getClient();
-  if (!lf) return fn();
+  if (!lf) return fn(() => {}, null);
 
   const trace = lf.trace({ name, metadata });
   const generation = trace.generation({
@@ -55,11 +55,28 @@ async function traceLlmCall({ name, input, metadata }, fn) {
     metadata,
   });
   const startedAt = Date.now();
-
+  let usage = null;
+  const reportUsage = (u) => {
+    if (!u) return;
+    // Two shapes come through here: Groq's text calls report token counts
+    // (prompt/completion/total), while transcription reports audio length
+    // in seconds instead — Langfuse prices each differently (per-token vs
+    // per-second), so they're kept as distinct usage shapes, not merged.
+    if (u.seconds !== undefined) {
+      usage = { total: u.seconds, unit: "SECONDS" };
+    } else {
+      usage = {
+        promptTokens: u.promptTokens ?? u.prompt_tokens ?? undefined,
+        completionTokens: u.completionTokens ?? u.completion_tokens ?? undefined,
+        totalTokens: u.totalTokens ?? u.total_tokens ?? undefined,
+      };
+    }
+  };
   try {
-    const result = await fn();
+    const result = await fn(reportUsage, trace.id);
     generation.end({
       output: typeof result === "string" ? result.slice(0, 4000) : result,
+      usage: usage || undefined,
       metadata: { latencyMs: Date.now() - startedAt },
     });
     // Fire-and-forget: don't let a slow/failed flush add latency to the
@@ -77,4 +94,4 @@ async function traceLlmCall({ name, input, metadata }, fn) {
   }
 }
 
-module.exports = { isLangfuseConfigured, traceLlmCall };
+module.exports = { isLangfuseConfigured, traceLlmCall, getClient };

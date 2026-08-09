@@ -26,6 +26,7 @@ import StarterPage from "../features/starter/StarterPage";
 import { useEngagement } from "../features/engagement/hooks/useEngagement";
 import { useCurrentEngagement } from "../shared/hooks/useCurrentEngagement";
 import { useConfigBanner } from "../shared/hooks/useConfigBanner";
+import TraceabilityPage from "../features/traceability/TraceabilityPage";
 /* ============================== APP ROOT ============================== */
 
 export default function App() {
@@ -156,6 +157,10 @@ const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
           <Route
             path="/engagement-setup"
             element={<EngagementSetupPage engagementId={currentEngagementId} />}
+          />
+          <Route
+            path="/traceability"
+            element={<TraceabilityPage />}
           />
         </Routes>
        
