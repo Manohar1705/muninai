@@ -24,14 +24,21 @@ export default function TraceabilityPage() {
     }
   }
 
-  useEffect(() => { loadTraces(); }, []);
+  useEffect(() => {
+    loadTraces();
+    // Auto-refresh in the background — no manual button needed. 15s is a
+    // reasonable balance: fast enough to feel "live", not so frequent it
+    // risks Langfuse's rate limit (15 requests/min on the free tier).
+    const interval = setInterval(loadTraces, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div style={{ padding: 32, fontFamily: "sans-serif" }}>
       <h2>LLM Traceability</h2>
-      <button onClick={loadTraces} disabled={loading} style={{ marginBottom: 16 }}>
-        {loading ? "Refreshing..." : "Refresh"}
-      </button>
+      <div style={{ marginBottom: 16, fontSize: 12.5, color: "#888" }}>
+        {loading ? "Updating…" : "Auto-refreshing every 15s"}
+      </div>
       {error && <div style={{ color: "red" }}>{error}</div>}
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <thead>

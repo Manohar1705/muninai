@@ -22,6 +22,7 @@ function Sidebar({ onSwitchEngagement }) {
     { id: "sme", label: "SME map", icon: icons.sme },
     { id: "chat", label: "Ask Munin", icon: icons.chat },
     { id: "engagementSetup", label: "Engagement Setup", icon: icons.settings },
+    { id: "llmInsights", label: "LLM Insights", icon: icons.coverage },
   ];
   const routeMap = {
     dashboard: "/dashboard",
@@ -32,6 +33,7 @@ function Sidebar({ onSwitchEngagement }) {
     sme: "/sme",
     chat: "/chat",
     engagementSetup: "/engagement-setup",
+    llmInsights: "/llm-insights",
   };
   return (
     <div style={{ width: 236, flexShrink: 0, background: C.bgRaised, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", padding: "22px 14px" }}>

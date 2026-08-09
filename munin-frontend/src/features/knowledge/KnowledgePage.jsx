@@ -40,7 +40,10 @@ function KnowledgeBase({engagementId}) {
     const matchesT = type === "All" || k.type === type;
     return matchesQ && matchesM && matchesT;
   }), [q, module, type, knowledgeObjects]);
-  const moduleOptions = useMemo(() => [...new Set(knowledgeObjects.map((k) => k.module))].sort(), [knowledgeObjects]);
+  const moduleOptions = useMemo(() => {
+    const fromData = [...new Set(knowledgeObjects.map((k) => k.module))].filter((m) => m !== "Unclassified").sort();
+    return ["Unclassified", ...fromData];
+  }, [knowledgeObjects]);
   const selectStyle = { background: C.bgRaised, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 10px", fontSize: 13, fontFamily: FF.sans };
 
   return (

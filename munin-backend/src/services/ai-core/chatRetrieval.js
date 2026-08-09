@@ -22,9 +22,16 @@ function compact(text) {
   return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
 }
 
+const CASUAL_PATTERN = /^(hi|hello|hey|hii+|thanks|thank you|thx|bye|ok|okay|good morning|good evening)[\s!.?]*$/i;
+
 function termsForRetrieval(question, history = []) {
   const currentTerms = meaningfulTerms(question);
   if (currentTerms.length) return currentTerms;
+
+  // A greeting/small-talk message has no real terms, same as a genuine
+  // follow-up ("and what about invoicing?") — but it should NOT reuse the
+  // prior question's context, unlike a real follow-up.
+  if (CASUAL_PATTERN.test(String(question || "").trim())) return [];
 
   const normalizedQuestion = String(question || "").trim().toLowerCase();
   for (let i = history.length - 1; i >= 0; i -= 1) {

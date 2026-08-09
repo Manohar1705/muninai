@@ -9,6 +9,12 @@ async function judgeAskMuninAnswer({ traceId, question, answer }) {
   const lf = getClient();
   if (!lf || !traceId) return;
 
+  // Casual/greeting messages ("hi", "thanks") have nothing meaningful to
+  // grade for correctness — judging them anyway produces arbitrary,
+  // confusing scores. Skip the judge (and its extra Groq call) for these.
+  const CASUAL_PATTERN = /^(hi|hello|hey|hii+|thanks|thank you|thx|bye|ok|okay|good morning|good evening)[\s!.?]*$/i;
+  if (CASUAL_PATTERN.test(question.trim())) return;
+
   try {
     const prompt = `You are grading an AI assistant's answer for correctness and relevance.
 Question: ${question}
