@@ -129,7 +129,7 @@ function Sessions({ engagementId }) {
             <SessionRow
               key={s.id}
               s={{ ...s, displayNum: index + 1 }}
-              moduleOptions={modules}
+              moduleOptions={[{ name: "Unclassified" }, ...modules]}
               onClick={() => openSession(s.id)}
               onTitleChange={(id, title) => setSessions((prev) => prev.map((sess) => (sess.id === id ? { ...sess, title } : sess)))}
               onTitleChanged={() => invalidateEngagementScopedQueries(queryClient, engagementId)}
