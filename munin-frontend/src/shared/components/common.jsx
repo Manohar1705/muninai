@@ -5,15 +5,20 @@ const C = {
   bg: "#0D0E11",
   bgRaised: "#131418",
   bgCard: "#16171C",
+  bgSubtle: "#1E2027",
   border: "rgba(245,243,238,0.09)",
   borderStrong: "rgba(245,243,238,0.16)",
   text: "#F5F3EE",
   textMuted: "#8B8F98",
   textFaint: "#5B5E66",
   amber: "#D9A441",
+  textOnAmber: "#1A1408",
   amberSoft: "rgba(217,164,65,0.14)",
   amberSofter: "rgba(217,164,65,0.08)",
   red: "#C4685A",
+  blue: "#8FB4D9",
+  borderTable: "#444",
+  borderTableSoft: "#333",
   redSoft: "rgba(196,104,90,0.14)",
   green: "#7FA37A",
 };
@@ -28,7 +33,7 @@ const Icon = ({ d, size = 16, ...p }) => (
 const IconRaven = (p) => (
   <svg width={p.size||20} height={p.size||20} viewBox="0 0 100 100" fill="currentColor" {...p}>
     <path d="M50 8c-3 0-5 2-7 5-8-2-16 1-20 8-2-1-5 0-6 3-1 2 0 4 2 5-3 3-4 8-2 12 1 2 3 3 5 3-1 4 1 8 4 10-3 4-2 9 2 12 5 4 12 4 17 1 2 4 6 6 10 6 5 0 9-3 11-7 5 2 11 0 14-4 3 3 8 4 12 2 4-2 6-7 5-11 3 0 6-2 7-5 1-4-1-8-4-10 2-4 1-9-2-12-1-4-5-6-9-6 0-4-2-7-5-9-1-4-4-7-8-8-1-3-4-5-8-5-2-4-6-6-11-6-4 0-8 2-10 5-2-1-5-1-7 1z"/>
-    <circle cx="38" cy="42" r="2.4" fill="#0D0E11"/>
+    <circle cx="38" cy="42" r="2.4" fill={C.bg}/>
   </svg>
 );
 const icons = {
@@ -83,8 +88,8 @@ function Pill({ children, tone = "default" }) {
   const tones = {
     default: { color: C.textMuted, bg: "transparent", border: C.border },
     amber: { color: C.amber, bg: C.amberSofter, border: "rgba(217,164,65,0.3)" },
-    open: { color: "#D9A441", bg: C.amberSofter, border: "rgba(217,164,65,0.3)" },
-    scheduled: { color: "#8FB4D9", bg: "rgba(143,180,217,0.1)", border: "rgba(143,180,217,0.3)" },
+    open: { color: C.amber, bg: C.amberSofter, border: "rgba(217,164,65,0.3)" },
+    scheduled: { color: C.blue, bg: "rgba(143,180,217,0.1)", border: "rgba(143,180,217,0.3)" },
     closed: { color: C.green, bg: "rgba(127,163,122,0.1)", border: "rgba(127,163,122,0.3)" },
     error: { color: C.red, bg: C.redSoft, border: "rgba(196,104,90,0.3)" },
   };
@@ -121,14 +126,14 @@ function ProgressBar({ value, height = 8, label, sub }) {
           {sub !== undefined && <span style={{ fontSize: 12.5, color: C.text, fontFamily: FF.mono, fontWeight: 500 }}>{sub ?? `${pct}%`}</span>}
         </div>
       )}
-      <div style={{ height, background: "#1E2027", borderRadius: height, overflow: "hidden" }}>
+      <div style={{ height, background: C.bgSubtle, borderRadius: height, overflow: "hidden" }}>
         <div style={{ width: `${pct}%`, height: "100%", background: color, transition: "width 0.3s ease" }} />
       </div>
     </div>
   );
 }
 const btnPrimary = {
-  display: "inline-flex", alignItems: "center", gap: 7, background: C.amber, color: "#1A1408",
+  display: "inline-flex", alignItems: "center", gap: 7, background: C.amber, color: C.textOnAmber,
   border: "none", borderRadius: 7, padding: "9px 16px", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: FF.sans,
 };
 const btnGhost = {

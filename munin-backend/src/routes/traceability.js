@@ -16,9 +16,17 @@ router.get("/traces", async (req, res) => {
   const auth = Buffer.from(`${publicKey}:${secretKey}`).toString("base64");
 
   try {
-    const response = await fetch(`${baseUrl}/api/public/observations?limit=20&type=GENERATION`, {
-      headers: { Authorization: `Basic ${auth}` },
-    });
+    // Run both Langfuse calls in parallel instead of one after another —
+    // they're independent, so there's no need to wait for observations
+    // before starting the scores request.
+    const [response, scoresRes] = await Promise.all([
+      fetch(`${baseUrl}/api/public/observations?limit=20&type=GENERATION`, {
+        headers: { Authorization: `Basic ${auth}` },
+      }),
+      fetch(`${baseUrl}/api/public/scores?limit=50`, {
+        headers: { Authorization: `Basic ${auth}` },
+      }),
+    ]);
 
     if (!response.ok) {
       const errText = await response.text().catch(() => "");
@@ -26,12 +34,6 @@ router.get("/traces", async (req, res) => {
     }
 
     const data = await response.json();
-
-    // One extra call for scores (not per-trace — same rate-limit-safe
-    // pattern as observations above), then match each score to its trace.
-    const scoresRes = await fetch(`${baseUrl}/api/public/scores?limit=50`, {
-      headers: { Authorization: `Basic ${auth}` },
-    });
     const scoresData = scoresRes.ok ? await scoresRes.json() : { data: [] };
     const scoreByTraceId = {};
     for (const s of scoresData.data || []) {

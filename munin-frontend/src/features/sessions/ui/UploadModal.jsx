@@ -34,7 +34,7 @@ function UploadFlow({ onComplete, onClose }) {
                   width: 20, height: 20, borderRadius: "50%", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
                   border: `1.5px solid ${done ? C.amber : active ? C.amber : C.border}`, background: done ? C.amber : "transparent",
                 }}>
-                  {done ? <Icon d={icons.check} size={11} color="#1A1408" /> : active ? <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.amber, animation: "muninPulse 1s infinite" }} /> : null}
+                  {done ? <Icon d={icons.check} size={11} color={C.textOnAmber} /> : active ? <div style={{ width: 6, height: 6, borderRadius: "50%", background: C.amber, animation: "muninPulse 1s infinite" }} /> : null}
                 </div>
                 <span style={{ fontSize: 13, color: done || active ? C.text : C.textFaint, textAlign: "left" }}>{label}{active ? "…" : ""}</span>
               </div>

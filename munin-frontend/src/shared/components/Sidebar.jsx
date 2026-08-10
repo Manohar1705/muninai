@@ -33,7 +33,7 @@ function Sidebar({ onSwitchEngagement }) {
     sme: "/sme",
     chat: "/chat",
     engagementSetup: "/engagement-setup",
-    llmInsights: "/traceability",
+    llmInsights: "/llm-insights",
   };
   return (
     <div style={{ width: 236, flexShrink: 0, background: C.bgRaised, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", padding: "22px 14px" }}>

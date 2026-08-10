@@ -227,8 +227,8 @@ function SessionRow({
           }
         }}
         style={{
-          background: "#16171C",
-          color: "#F5F3EE",
+          background: C.bgCard,
+          color: C.text,
           border: "1px solid rgba(245,243,238,0.09)",
           borderRadius: "6px",
           padding: "4px 8px",

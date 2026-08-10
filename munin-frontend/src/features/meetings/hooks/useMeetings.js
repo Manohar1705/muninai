@@ -1,5 +1,5 @@
-import { useEffect, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { meetingsApi, normalizeMeeting } from "../api";
 
 const MEETING_TERMINAL = new Set(["call_ended", "done", "error", "fatal"]);
@@ -7,7 +7,7 @@ const MEETING_TERMINAL = new Set(["call_ended", "done", "error", "fatal"]);
 export function useMeetings(engagementId) {
   const queryClient = useQueryClient();
   const queryKey = ["meetings", engagementId];
-  const pollTimers = useRef({});
+ 
 
   const { data, isLoading } = useQuery({
     queryKey,
@@ -19,29 +19,40 @@ export function useMeetings(engagementId) {
   });
 
   const meetings = data ?? [];
+  const activeIds = meetings.filter((m) => !MEETING_TERMINAL.has(m.status)).map((m) => m.id);
 
+  const statusResults = useQueries({
+    queries: activeIds.map((id) => ({
+      queryKey: ["meeting-status", id],
+      queryFn: () => meetingsApi.meetingStatus(id),
+      // Each meeting's own status check drives its own interval —
+      // this is the call that actually asks Recall.ai for the real
+      // status and updates the backend, not just a read.
+      refetchInterval: (query) => {
+        const status = query.state.data?.data?.meeting?.status;
+        return status && MEETING_TERMINAL.has(status) ? false : 4000;
+      },
+    })),
+  });
+
+  useEffect(() => {
+    statusResults.forEach((result) => {
+      const meeting = result.data?.data?.meeting;
+      if (!meeting) return;
+      const merged = normalizeMeeting(meeting);
+      queryClient.setQueryData(queryKey, (prev) =>
+        (prev ?? []).map((m) => (m.id === merged.id ? { ...m, ...merged, warning: result.data.data.warning || null } : m))
+      );
+      if (merged.sessionId) {
+        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusResults.map((r) => r.dataUpdatedAt).join(",")]);
   const updateMeetings = (updater) => {
     queryClient.setQueryData(queryKey, (prev) => updater(prev ?? []));
   };
 
-  const schedulePoll = (id, delay = 4000) => {
-    clearTimeout(pollTimers.current[id]);
-    pollTimers.current[id] = setTimeout(() => pollMeeting(id), delay);
-  };
-
-  const pollMeeting = async (id) => {
-    const res = await meetingsApi.meetingStatus(id);
-    if (res.ok && res.data?.meeting) {
-      const merged = normalizeMeeting(res.data.meeting);
-      updateMeetings((prev) => prev.map((m) => (m.id === id ? { ...m, ...merged, warning: res.data.warning || null } : m)));
-      if (merged.sessionId) {
-        queryClient.invalidateQueries({ queryKey: ["dashboard"] });
-      }
-      if (!MEETING_TERMINAL.has(merged.status)) schedulePoll(id);
-    } else {
-      schedulePoll(id, 6000);
-    }
-  };
   const handleJoin = async (url, botName, meetingTitle) => {
     if (!engagementId) {
       return { ok: false, error: "No engagement selected." };
@@ -50,7 +61,6 @@ export function useMeetings(engagementId) {
     const meeting = res.data?.meeting ? normalizeMeeting(res.data.meeting) : null;
     if (meeting) {
       updateMeetings((prev) => [meeting, ...prev]);
-      if (res.ok) schedulePoll(meeting.id, 3000);
     }
     if (!res.ok) {
       return { ok: false, error: res.data?.error || `Failed to send Munin to the meeting (${res.status}).` };
@@ -72,19 +82,11 @@ export function useMeetings(engagementId) {
     }
   };
 
-  useEffect(() => {
-    meetings.forEach((m) => {
-      if (!MEETING_TERMINAL.has(m.status) && !pollTimers.current[m.id]) schedulePoll(m.id, 3000);
-    });
-    return () => { Object.values(pollTimers.current).forEach(clearTimeout); pollTimers.current = {}; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data]);
 
   return {
     meetings,
     isLoading,
     updateMeetings,
-    schedulePoll,
     handleJoin,
     handleLeave,
   };

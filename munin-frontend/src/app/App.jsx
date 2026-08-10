@@ -159,7 +159,7 @@ const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
             element={<EngagementSetupPage engagementId={currentEngagementId} />}
           />
           <Route
-            path="/traceability"
+            path="/llm-insights"
             element={<TraceabilityPage />}
           />
         </Routes>
