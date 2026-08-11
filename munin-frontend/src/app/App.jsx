@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
-
 import { C, FF, FONT_IMPORT, Icon, IconRaven, icons, btnPrimary } from "../shared/components/common";
+import { ToastProvider } from "../shared/components/Toast";
 
 import Sidebar from "../shared/components/Sidebar";
 import EngagementHeader from "../shared/components/EngagementHeader";
@@ -51,6 +51,7 @@ const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
   
   if (!currentEngagementId) {
     return (
+      <ToastProvider>
       <div style={{ fontFamily: FF.sans, background: C.bg, color: C.text, minHeight: "100vh" }}>
         <style>{FONT_IMPORT}</style>
         <StarterPage
@@ -60,6 +61,7 @@ const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
           }}
         />
       </div>
+      </ToastProvider>
     );
   }
 
@@ -67,6 +69,7 @@ const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
 
 
   return (
+    <ToastProvider>
     <div style={{ fontFamily: FF.sans, background: C.bg, color: C.text, display: "flex", minHeight: 640, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}` }}>
       <style>{FONT_IMPORT}</style>
       <Sidebar
@@ -166,5 +169,6 @@ const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
        
       </div>
     </div>
+    </ToastProvider>
   );
 }

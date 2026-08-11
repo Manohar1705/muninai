@@ -11,6 +11,7 @@ import {
   ProgressBar,
   btnPrimary,
   btnGhost,
+  Input,
 } from "../../shared/components/common";
 import { PHASES } from "../../shared/constants/constants";
 
@@ -190,7 +191,7 @@ function NewEngagementView({ onCreated, onCancel }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  const inputStyle = {
+  const textareaStyle = {
     background: C.bgRaised,
     border: `1px solid ${C.border}`,
     color: C.text,
@@ -255,7 +256,7 @@ function NewEngagementView({ onCreated, onCancel }) {
       <Card style={{ padding: "24px 26px", display: "flex", flexDirection: "column", gap: 16 }}>
         <div>
           <div style={{ fontSize: 11.5, color: C.textFaint, marginBottom: 6 }}>Engagement name</div>
-          <input autoFocus placeholder="e.g. Nova Payments Platform" value={name} onChange={(e) => setName(e.target.value)} style={inputStyle} />
+          <Input autoFocus placeholder="e.g. Nova Payments Platform" value={name} onChange={(e) => setName(e.target.value)} style={{ borderRadius: 7, padding: "10px 12px", width: "100%" }} />
         </div>
         <div>
           <div style={{ fontSize: 11.5, color: C.textFaint, marginBottom: 6 }}>Details (optional)</div>
@@ -264,7 +265,7 @@ function NewEngagementView({ onCreated, onCancel }) {
             value={details}
             onChange={(e) => setDetails(e.target.value)}
             rows={3}
-            style={{ ...inputStyle, resize: "vertical" }}
+            style={{ ...textareaStyle, resize: "vertical" }}
           />
         </div>
         {error && <div style={{ fontSize: 12, color: C.red }}>{error}</div>}

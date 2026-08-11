@@ -2,13 +2,13 @@ import React, { useState, useEffect, useRef } from "react";
 
 import {
   C,
-  FF,
   Card,
   Section,
   Icon,
   icons,
   btnPrimary,
   btnGhost,
+  Input,
 } from "../../shared/components/common";
 
 
@@ -143,13 +143,13 @@ function AskMunin({ engagementId }) {
           </div>
 
           <div style={{ display: "flex", gap: 8, marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
-            <input
+            <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
               placeholder="Ask a question…"
               disabled={sending}
-              style={{ flex: 1, background: C.bgRaised, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "10px 12px", fontSize: 13.5, fontFamily: FF.sans }}
+              style={{ flex: 1, borderRadius: 7, padding: "10px 12px", fontSize: 13.5 }}
             />
             <button onClick={send} disabled={sending || !input.trim()} style={{ ...btnPrimary, opacity: sending || !input.trim() ? 0.6 : 1 }}>
               <Icon d={icons.send} size={14} /> {sending ? "…" : "Send"}

@@ -3,9 +3,11 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { engagementApi } from "../api";
 import { getPlanValidationError } from "../modulePlanning";
 import { invalidateEngagementScopedQueries } from "../../../shared/api/client";
+import { useToast } from "../../../shared/components/Toast";
 
 export function useEngagementSetup(engagementId) {
   const queryClient = useQueryClient();
+  const showToast = useToast();
 
   const { data: engagementsData } = useQuery({
     queryKey: ["engagements"],
@@ -29,7 +31,7 @@ export function useEngagementSetup(engagementId) {
   const save = async (name, details) => {
     if (!engagement) return;
     if (!name.trim()) {
-      alert("Engagement name is required.");
+      showToast("Engagement name is required.");
       return;
     }
     try {
@@ -38,7 +40,7 @@ export function useEngagementSetup(engagementId) {
       invalidate();
     } catch (err) {
       console.error(err);
-      alert("Failed to save engagement");
+      showToast("Failed to save engagement");
     } finally {
       setSaving(false);
     }
@@ -54,7 +56,7 @@ export function useEngagementSetup(engagementId) {
       refetchModules();
     } catch (err) {
       console.error(err);
-      alert("Failed to create module");
+      showToast("Failed to create module");
     }
   };
 
@@ -99,7 +101,7 @@ export function useEngagementSetup(engagementId) {
       await queryClient.invalidateQueries({ queryKey: ["engagements"] });
     } catch (err) {
       console.error(err);
-      alert(err.message || "Failed to delete engagement.");
+      showToast(err.message || "Failed to delete engagement.");
     } finally {
       setDeletingEngagement(false);
     }

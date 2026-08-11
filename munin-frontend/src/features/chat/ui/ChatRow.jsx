@@ -5,6 +5,7 @@ import {
   FF,
   Icon,
   icons,
+  Input,
 } from "../../../shared/components/common";
 function ChatMenu({ conv, onRename, onPin, onArchive, onDelete, onClose }) {
   const menuRef = useRef(null);
@@ -75,7 +76,7 @@ function ChatRow({ conv, active, onSelect, onRename, onPin, onArchive, onDelete 
     >
       <div style={{ flex: 1, minWidth: 0 }}>
         {editing ? (
-          <input
+          <Input
             ref={inputRef}
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
@@ -86,8 +87,8 @@ function ChatRow({ conv, active, onSelect, onRename, onPin, onArchive, onDelete 
             }}
             onBlur={commitRename}
             style={{
-              width: "100%", background: C.bg, border: `1px solid ${C.amber}`, borderRadius: 5,
-              color: C.text, fontSize: 12.5, fontFamily: FF.sans, padding: "3px 6px", boxSizing: "border-box",
+              width: "100%", background: C.bg, borderColor: C.amber, borderRadius: 5,
+              fontSize: 12.5, padding: "3px 6px", boxSizing: "border-box",
             }}
           />
         ) : (

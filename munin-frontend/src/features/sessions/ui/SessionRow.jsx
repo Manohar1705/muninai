@@ -6,8 +6,10 @@ import {
   Pill,
   Icon,
   icons,
+  Input,
 } from "../../../shared/components/common";
 import { sessionsApi } from "../api";
+import { useToast } from "../../../shared/components/Toast";
 import {
   getSessionTitleError,
   MAX_SESSION_TITLE_LENGTH,
@@ -23,6 +25,7 @@ function SessionRow({
   onModuleChanged,
 }) {
   const [editingTitle, setEditingTitle] = useState(false);
+  const showToast = useToast();
   const [titleDraft, setTitleDraft] = useState(s.title);
   const [titleError, setTitleError] = useState("");
   const [savingTitle, setSavingTitle] = useState(false);
@@ -100,7 +103,7 @@ function SessionRow({
         {editingTitle ? (
           <div onClick={(e) => e.stopPropagation()} style={{ marginBottom: 5 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <input
+              <Input
                 autoFocus
                 value={titleDraft}
                 maxLength={MAX_SESSION_TITLE_LENGTH}
@@ -122,13 +125,9 @@ function SessionRow({
                   flex: 1,
                   minWidth: 180,
                   background: C.bg,
-                  color: C.text,
-                  border: `1px solid ${titleError ? C.red : C.amber}`,
-                  borderRadius: 6,
+                  borderColor: titleError ? C.red : C.amber,
                   padding: "6px 8px",
-                  fontFamily: FF.sans,
                   fontSize: 14,
-                  outline: "none",
                 }}
               />
               <button
@@ -222,7 +221,7 @@ function SessionRow({
             onModuleChanged?.();
           } catch (err) {
             console.error(err);
-            alert(err.message || "Failed to update module");
+            showToast(err.message || "Failed to update module");
             onModuleChange(s.id, previous);
           }
         }}

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { chatApi } from "../api";
+import { useToast } from "../../../shared/components/Toast";
 
 
 
 export function useChat(activeId, setActiveId, engagementId) {
+  const showToast = useToast();
   const queryClient = useQueryClient();
   const didPickInitial = useRef(false);
   const [sending, setSending] = useState(false);
@@ -98,7 +100,7 @@ export function useChat(activeId, setActiveId, engagementId) {
       setConversations((list) => list.map((c) => (c.id === id ? { ...c, title } : c)));
     } catch (err) {
       console.error(err);
-      alert("Couldn't rename that chat — is the backend running?");
+      showToast("Couldn't rename that chat — is the backend running?");
     }
   };
 
@@ -108,7 +110,7 @@ export function useChat(activeId, setActiveId, engagementId) {
       setConversations((list) => list.map((c) => (c.id === id ? { ...c, pinned } : c)));
     } catch (err) {
       console.error(err);
-      alert("Couldn't pin that chat — is the backend running?");
+      showToast("Couldn't pin that chat — is the backend running?");
     }
   };
 
@@ -118,7 +120,7 @@ export function useChat(activeId, setActiveId, engagementId) {
       setConversations((list) => list.map((c) => (c.id === id ? { ...c, archived } : c)));
     } catch (err) {
       console.error(err);
-      alert("Couldn't archive that chat — is the backend running?");
+      showToast("Couldn't archive that chat — is the backend running?");
     }
   };
 
@@ -139,7 +141,7 @@ export function useChat(activeId, setActiveId, engagementId) {
       }
     } catch (err) {
       console.error(err);
-      alert("Couldn't delete that chat — is the backend running?");
+      showToast("Couldn't delete that chat — is the backend running?");
     }
   };
 

@@ -11,12 +11,14 @@ import {
   icons,
   btnPrimary,
   btnGhost,
+  Input,
 } from "../../shared/components/common";
 
 import { invalidateEngagementScopedQueries } from "../../shared/api/client";
 import { useMeetings } from "./hooks/useMeetings";
 import { useNavigate } from "react-router-dom";
 import { useModules } from "../../shared/hooks/useModules";
+import { useToast } from "../../shared/components/Toast";
 /* ============================== MEETINGS ============================== */
 const MEETING_TERMINAL = new Set(["call_ended", "done", "error", "fatal"]);
 
@@ -37,6 +39,7 @@ function meetingStatusMeta(status) {
 }
 
 function Meetings({ configStatus, engagementId}) {
+  const showToast = useToast();
   const modules = useModules(engagementId);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -59,7 +62,6 @@ function Meetings({ configStatus, engagementId}) {
   const [leavingId, setLeavingId] = useState(null);
   
 
-  const inputStyle = { background: C.bgRaised, border: `1px solid ${C.border}`, color: C.text, borderRadius: 7, padding: "8px 10px", fontSize: 13, fontFamily: FF.sans, width: "100%", boxSizing: "border-box" };
   const labelStyle = { display: "block", fontSize: 11.5, color: C.textFaint, marginBottom: 5 };
 
   const handleJoin = async (e) => {
@@ -81,7 +83,7 @@ function Meetings({ configStatus, engagementId}) {
   const handleLeave = async (id) => {
     setLeavingId(id);
     const result = await leaveMeetingHook(id);
-    if (!result.ok) alert(result.error);
+    if (!result.ok) showToast(result.error);
     setLeavingId(null);
   };
 
@@ -98,15 +100,15 @@ function Meetings({ configStatus, engagementId}) {
           <form onSubmit={handleJoin} style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
             <div style={{ flex: "2 1 260px" }}>
               <label style={labelStyle}>Meeting URL</label>
-              <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://meet.google.com/abc-defg-hij" style={inputStyle} />
+              <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://meet.google.com/abc-defg-hij" style={{ borderRadius: 7, padding: "8px 10px", width: "100%", boxSizing: "border-box" }} />
             </div>
             <div style={{ flex: "1 1 160px" }}>
               <label style={labelStyle}>Bot name</label>
-              <input value={botName} onChange={(e) => setBotName(e.target.value)} style={inputStyle} />
+              <Input value={botName} onChange={(e) => setBotName(e.target.value)} placeholder="Munin" style={{ borderRadius: 7, padding: "8px 10px", width: "100%", boxSizing: "border-box" }} />
             </div>
             <div style={{ flex: "1 1 200px" }}>
               <label style={labelStyle}>Meeting name</label>
-              <input value={meetingTitle} onChange={(e) => setMeetingTitle(e.target.value)} placeholder="e.g. Payroll Deep Dive" style={inputStyle} />
+              <Input value={meetingTitle} onChange={(e) => setMeetingTitle(e.target.value)} placeholder="e.g. Payroll Deep Dive" style={{ borderRadius: 7, padding: "8px 10px", width: "100%", boxSizing: "border-box" }} />
             </div>
             <button type="submit" disabled={joining || !url.trim()} style={{ ...btnPrimary, opacity: joining || !url.trim() ? 0.6 : 1 }}>
               <Icon d={icons.video} size={14} /> {joining ? "Sending…" : "Send Munin to meeting"}
@@ -220,7 +222,7 @@ function Meetings({ configStatus, engagementId}) {
                                 invalidateEngagementScopedQueries(queryClient, engagementId);
                               } catch (err) {
                                 console.error(err);
-                                alert(err.message || "Failed to update meeting module.");
+                                showToast(err.message || "Failed to update meeting module.");
                                 setMeetings((prev) => prev.map((meeting) => (meeting.id === m.id ? { ...meeting, module: previous } : meeting)));
                               }
                             }}
@@ -247,7 +249,7 @@ function Meetings({ configStatus, engagementId}) {
                                 setMeetings((prev) => prev.filter((meeting) => meeting.id !== m.id));
                               } catch (err) {
                                 console.error(err);
-                                alert("Failed to delete meeting");
+                                showToast("Failed to delete meeting");
                               }
                             }}
                             style={{

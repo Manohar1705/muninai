@@ -112,6 +112,42 @@ function Section({ title, action, children, style }) {
 function Card({ children, style, ...rest }) {
   return <div style={{ background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 10, ...style }} {...rest}>{children}</div>;
 }
+function Input({ style, ...rest }) {
+  return (
+    <input
+      style={{
+        background: C.bgRaised,
+        border: `1px solid ${C.border}`,
+        borderRadius: 6,
+        padding: "8px 12px",
+        color: C.text,
+        fontSize: 13,
+        fontFamily: FF.sans,
+        outline: "none",
+        ...style,
+      }}
+      {...rest}
+    />
+  );
+}
+function Modal({ children, onClose, align = "center" }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(6,6,8,0.72)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: align === "center" ? "center" : "flex-end",
+        zIndex: 50,
+      }}
+    >
+      <div onClick={(e) => e.stopPropagation()}>{children}</div>
+    </div>
+  );
+}
 // Quantitative coverage bar (e.g. "sessions covered / sessions planned").
 // `value` is a 0-100 percentage; colors shift from amber toward green as it
 // approaches completion so the same component reads well at 5% or 95%.
@@ -148,6 +184,8 @@ export {
   IconRaven,
   icons,
   Card,
+  Input,
+  Modal,
   Section,
   Pill,
   TypeBadge,

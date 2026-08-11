@@ -2,18 +2,20 @@ import React, { useEffect, useState } from "react";
 
 import {
   C,
-  FF,
   Icon,
   icons,
   btnGhost,
+  Input,
 } from "../../../shared/components/common";
 import { getPlanValidationError } from "../modulePlanning";
+import { useToast } from "../../../shared/components/Toast";
 
 // Modules are the source of truth for session classification: every KT
 // session and meeting is filed under exactly one of the modules defined
 // here (or "Unclassified"), and Munin never invents a module name on its
 // own — it only ever picks among what's defined on this page.
 function ModuleRow({ module, onRename, onPlanChange, onDelete }) {
+  const showToast = useToast();
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(module.name);
   const [renaming, setRenaming] = useState(false);
@@ -31,15 +33,6 @@ function ModuleRow({ module, onRename, onPlanChange, onDelete }) {
     setPlanError(null);
   }, [module.planned_sessions]);
 
-  const inputStyle = {
-    background: C.bgRaised,
-    border: `1px solid ${C.border}`,
-    color: C.text,
-    borderRadius: 6,
-    padding: "6px 8px",
-    fontFamily: FF.sans,
-    fontSize: 13,
-  };
 
   const commitRename = async () => {
     const trimmed = nameDraft.trim();
@@ -54,7 +47,7 @@ function ModuleRow({ module, onRename, onPlanChange, onDelete }) {
       setEditingName(false);
     } catch (err) {
       console.error(err);
-      alert(err.message || "Failed to rename module.");
+      showToast(err.message || "Failed to rename module.");
       setNameDraft(module.name);
     } finally {
       setRenaming(false);
@@ -101,7 +94,7 @@ function ModuleRow({ module, onRename, onPlanChange, onDelete }) {
     >
       {editingName ? (
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <input
+          <Input
             autoFocus
             value={nameDraft}
             disabled={renaming}
@@ -110,7 +103,7 @@ function ModuleRow({ module, onRename, onPlanChange, onDelete }) {
               if (e.key === "Enter") commitRename();
               if (e.key === "Escape") { setEditingName(false); setNameDraft(module.name); }
             }}
-            style={{ ...inputStyle, flex: 1 }}
+            style={{ padding: "6px 8px", flex: 1 }}
           />
           <button onClick={commitRename} disabled={renaming} style={{ ...btnGhost, padding: "6px 10px" }}>
             <Icon d={icons.check} size={13} />
@@ -130,7 +123,7 @@ function ModuleRow({ module, onRename, onPlanChange, onDelete }) {
       )}
 
       <div>
-        <input
+        <Input
           type="number"
           min={module.completed_sessions || 0}
           step="1"
@@ -148,11 +141,10 @@ function ModuleRow({ module, onRename, onPlanChange, onDelete }) {
             }
           }}
           style={{
-            ...inputStyle,
+            padding: "6px 8px",
             width: "100%",
             borderColor: planError ? C.red : C.border,
             background: planError ? "rgba(196,104,90,0.08)" : C.bgRaised,
-            outline: "none",
           }}
         />
         {planError && (
@@ -182,7 +174,7 @@ function ModuleRow({ module, onRename, onPlanChange, onDelete }) {
             await onDelete(module.name);
           } catch (err) {
             console.error(err);
-            alert(err.message || "Failed to delete module.");
+            showToast(err.message || "Failed to delete module.");
           } finally {
             setDeleting(false);
           }

@@ -8,6 +8,7 @@ import {
   IconRaven,
   icons,
   btnGhost,
+  Modal,
 } from "../../../shared/components/common";
 
 import { sessionsApi } from "../api";
@@ -20,7 +21,7 @@ function UploadFlow({ onComplete, onClose }) {
     return () => clearTimeout(t);
   }, [step]);
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(6,6,8,0.72)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
+    <Modal>
       <Card style={{ width: 420, padding: "32px 30px", textAlign: "center" }}>
         <div style={{ color: C.amber, marginBottom: 18, display: "flex", justifyContent: "center" }}><IconRaven size={30} /></div>
         <div style={{ fontSize: 14.5, color: C.text, marginBottom: 4 }}>Processing session recording</div>
@@ -43,11 +44,11 @@ function UploadFlow({ onComplete, onClose }) {
         </div>
         <style>{`@keyframes muninPulse { 0%,100%{opacity:1} 50%{opacity:.3} }`}</style>
       </Card>
-    </div>
+    </Modal>
   );
 }
 
-const overlayStyle = { position: "fixed", inset: 0, background: "rgba(6,6,8,0.72)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 };
+
 
 function UploadModal({ onClose, onRealUploadComplete, engagementId }) {
   const [mode, setMode] = useState("choose"); // choose | demo | uploading-document | uploading-media | error
@@ -87,7 +88,7 @@ function UploadModal({ onClose, onRealUploadComplete, engagementId }) {
   // }
 
   return (
-    <div style={overlayStyle}>
+    <Modal>
       <Card style={{ width: 460, padding: "26px 26px 28px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
           <div style={{ fontSize: 15, fontWeight: 500, color: C.text }}>Upload session</div>
@@ -145,7 +146,7 @@ function UploadModal({ onClose, onRealUploadComplete, engagementId }) {
           </div>
         )}
       </Card>
-    </div>
+    </Modal>
   );
 }
 export default UploadModal;

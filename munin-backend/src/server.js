@@ -127,7 +127,6 @@ async function stop() {
 }
 
 async function shutdown(signal) {
-  console.log(`${signal} received; shutting down.`);
   try {
     await stop();
   } catch (err) {

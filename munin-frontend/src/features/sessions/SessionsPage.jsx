@@ -23,11 +23,13 @@ import UploadModal from "./ui/UploadModal";
 import { useLocation } from "react-router-dom";
 import { useSessions } from "./hooks/useSessions";
 import { useModules } from "../../shared/hooks/useModules";
+import { useToast } from "../../shared/components/Toast";
 /* ============================== SESSIONS ============================== */
 
 
 
 function Sessions({ engagementId }) {
+  const showToast = useToast();
   const modules = useModules(engagementId);
   const queryClient = useQueryClient();
   const { sessions, updateSessions, handleRealUpload, handleUploadComplete } = useSessions(engagementId);
@@ -52,7 +54,7 @@ function Sessions({ engagementId }) {
       }
     } catch (err) {
       console.error(err);
-      alert("Couldn't load that session — is the backend running?");
+      showToast("Couldn't load that session — is the backend running?");
     } finally {
       setLoadingSelected(false);
     }

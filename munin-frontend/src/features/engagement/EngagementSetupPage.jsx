@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Card, Section, C, FF, Icon, icons, ProgressBar, btnPrimary, btnGhost } from "../../shared/components/common";
+import { Card, Section, C, FF, Icon, icons, ProgressBar, btnPrimary, btnGhost, Input } from "../../shared/components/common";
 import ModuleRow from "./ui/ModuleRow";
 import { useEngagementSetup } from "./hooks/useEngagementSetup";
 
@@ -27,7 +27,7 @@ function EngagementSetupPage({ engagementId }) {
 
 
 
-  const inputStyle = {
+  const textareaStyle = {
     background: C.bgRaised,
     border: `1px solid ${C.border}`,
     color: C.text,
@@ -53,7 +53,7 @@ function EngagementSetupPage({ engagementId }) {
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               <div>
                 <div style={{ fontSize: 11.5, color: C.textFaint, marginBottom: 6 }}>Engagement name</div>
-                <input value={name} onChange={(e) => setName(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
+                <Input value={name} onChange={(e) => setName(e.target.value)} style={{ borderRadius: 7, padding: "10px 12px", width: "100%" }} />
               </div>
               <div>
                 <div style={{ fontSize: 11.5, color: C.textFaint, marginBottom: 6 }}>Engagement details</div>
@@ -61,7 +61,7 @@ function EngagementSetupPage({ engagementId }) {
                   value={details}
                   onChange={(e) => setDetails(e.target.value)}
                   rows={3}
-                  style={{ ...inputStyle, width: "100%", resize: "vertical" }}
+                  style={{ ...textareaStyle, width: "100%", resize: "vertical" }}
                 />
               </div>
               <div>
@@ -86,11 +86,11 @@ function EngagementSetupPage({ engagementId }) {
         <Card style={{ padding: "20px 22px" }}>
           <Section title="Module Planning">
             <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
-              <input
+              <Input
                 value={newModule}
                 onChange={(e) => setNewModule(e.target.value)}
                 placeholder="Add module..."
-                style={{ ...inputStyle, flex: 1 }}
+                style={{ borderRadius: 7, padding: "10px 12px", flex: 1 }}
               />
               <button onClick={handleAddModule} style={btnPrimary}>Add</button>
             </div>

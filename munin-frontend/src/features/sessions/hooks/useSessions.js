@@ -1,7 +1,9 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { sessionsApi } from "../api";
 import { invalidateEngagementScopedQueries } from "../../../shared/api/client";
+import { useToast } from "../../../shared/components/Toast";
 export function useSessions(engagementId) {
+  const showToast = useToast();
   const queryClient = useQueryClient();
   const queryKey = ["sessions", engagementId];
 
@@ -47,7 +49,7 @@ export function useSessions(engagementId) {
       return false;
     } catch (err) {
       console.error(err);
-      alert("Upload failed — is the backend running?");
+      showToast("Upload failed — is the backend running?");
       return true;
     }
   };

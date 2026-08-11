@@ -11,6 +11,8 @@ import {
   Icon,
   icons,
   btnGhost,
+  Input,
+  Modal,
 } from "../../shared/components/common";
 import { useKnowledge } from "./hooks/useKnowledge";
 import { useNavigate } from "react-router-dom";
@@ -52,7 +54,7 @@ function KnowledgeBase({engagementId}) {
         <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
           <div style={{ position: "relative", flex: "1 1 220px" }}>
             <span style={{ position: "absolute", left: 10, top: 9, color: C.textFaint }}><Icon d={icons.search} size={15} /></span>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search knowledge objects…" style={{ ...selectStyle, width: "100%", paddingLeft: 32, boxSizing: "border-box" }} />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search knowledge objects…" style={{ borderRadius: 7, padding: "8px 10px", width: "100%", paddingLeft: 32, boxSizing: "border-box" }} />
           </div>
           <select value={module} onChange={(e) => setModule(e.target.value)} style={selectStyle}>
             <option>All</option>{moduleOptions.map((m) => <option key={m}>{m}</option>)}
@@ -78,8 +80,8 @@ function KnowledgeBase({engagementId}) {
       </Section>
 
       {open && (
-        <div onClick={() => setOpen(null)} style={{ position: "fixed", inset: 0, background: "rgba(6,6,8,0.6)", display: "flex", justifyContent: "flex-end", zIndex: 50 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ width: 420, height: "100%", background: C.bgRaised, borderLeft: `1px solid ${C.border}`, padding: "26px 26px", overflowY: "auto" }}>
+        <Modal onClose={() => setOpen(null)} align="right">
+          <div style={{ width: 420, height: "100%", background: C.bgRaised, borderLeft: `1px solid ${C.border}`, padding: "26px 26px", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 18 }}>
               <TypeBadge type={open.type} />
               <button onClick={() => setOpen(null)} style={{ background: "none", border: "none", color: C.textFaint, cursor: "pointer" }}><Icon d={icons.x} size={18} /></button>
@@ -98,7 +100,7 @@ function KnowledgeBase({engagementId}) {
               </button>
             </div>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );
