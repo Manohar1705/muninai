@@ -52,7 +52,7 @@ async function extractKnowledgeFromText(text, sourceLabel, engagementId) {
 
   const prompt = await buildExtractionPrompt(text, sourceLabel, engagementId);
   const knownModuleNames = (await listModules(engagementId)).map((m) => m.name);
-  const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
   return traceLlmCall({ name: "extract-knowledge", input: prompt, metadata: { model, sourceLabel } }, async (reportUsage) => {
     const response = await fetch(GROQ_API_URL, {
@@ -263,7 +263,7 @@ ${(dbContext.readinessSummary || [])
 async function askLlm(question, knowledgeObjects, history = [], dbContext = {}, conversationStats = {}) {
   const candidates = shortlistCandidates(question, knowledgeObjects, history, 50);
   const system = buildSystemPrompt(candidates, dbContext, conversationStats);
-  const model = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+  const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
  
   // Prior turns are sent as real chat messages (not text stuffed into the
   // system prompt) so the model can naturally resolve follow-ups like "in

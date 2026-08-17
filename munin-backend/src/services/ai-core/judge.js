@@ -1,4 +1,4 @@
-const { getClient } = require("../observability");
+const { getClient, traceLlmCall } = require("../observability");
 
 // LLM-as-a-Judge: after ask-munin already answered the user, a second,
 // cheap Groq call rates that answer's quality and pushes the result to
@@ -23,26 +23,37 @@ Answer: ${answer}
 Reply with ONLY a JSON object: { "score": <1-5>, "reason": "<one short sentence>" }
 1 = irrelevant or wrong. 5 = accurate and directly answers the question.`;
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
-        max_tokens: 100,
-        temperature: 0,
-        response_format: { type: "json_object" },
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+    const judgeModel = process.env.GROQ_JUDGE_MODEL || "openai/gpt-oss-20b";
 
-    if (!response.ok) return;
+    const parsed = await traceLlmCall(
+      { name: "judge-answer", input: prompt, metadata: { model: judgeModel } },
+      async (reportUsage) => {
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: judgeModel,
+            max_tokens: 100,
+            temperature: 0,
+            response_format: { type: "json_object" },
+            messages: [{ role: "user", content: prompt }],
+          }),
+        });
 
-    const data = await response.json();
-    const raw = data.choices?.[0]?.message?.content || "{}";
-    const parsed = JSON.parse(raw);
+        if (!response.ok) {
+          const errText = await response.text().catch(() => "");
+          throw new Error(`Judge Groq error ${response.status}: ${errText}`);
+        }
+
+        const data = await response.json();
+        reportUsage(data.usage);
+        return JSON.parse(data.choices?.[0]?.message?.content || "{}");
+      }
+    );
+
     const score = Number(parsed.score);
     if (!Number.isFinite(score)) return;
 
