@@ -13,7 +13,7 @@ function tokenize(text) {
   return text
     .toLowerCase()
     .split(/\W+/)
-    .filter((w) => w.length > 2 && !STOPWORDS.has(w));
+    .filter((w) => w.length > 1 && !STOPWORDS.has(w));
 }
 
 /**

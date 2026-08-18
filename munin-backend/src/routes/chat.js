@@ -647,7 +647,13 @@ router.post("/", async (req, res) => {
   } catch (err) {
     console.error("CHAT ERROR:", err);
 
-    reply = "Munin AI is temporarily unavailable because the LLM rate limit has been reached. Please try again later.";
+    if (/model_decommissioned|does not exist/i.test(err.message)) {
+      reply = "Munin AI's model configuration needs an update. Please contact support.";
+    } else if (/429/.test(err.message)) {
+      reply = "Munin AI is temporarily unavailable because the LLM rate limit has been reached. Please try again later.";
+    } else {
+      reply = "Munin AI is temporarily unavailable. Please try again later.";
+    }
     isGap = false;
     usedLlm = false;
     }

@@ -41,14 +41,21 @@ function getClient() {
  * @param {string} info.name - e.g. "extract-knowledge", "ask-munin", "transcribe-audio"
  * @param {string|Object} info.input - what was sent to Groq (truncated before logging)
  * @param {Object} [info.metadata] - e.g. { model, sourceLabel }
+ * @param {string} [info.traceId] - an existing trace ID to nest this call under
+ *   (e.g. the judge call nesting under the original ask-munin trace) instead
+ *   of starting a new top-level trace.
  * @param {() => Promise<any>} fn - the actual Groq call + parsing logic
  */
-async function traceLlmCall({ name, input, metadata }, fn) {
-  const lf = getClient();
-  if (!lf) return fn(() => {}, null);
+  async function traceLlmCall({ name, input, metadata, traceId }, fn) {
+    const lf = getClient();
+    if (!lf) return fn(() => {}, null);
 
-  const trace = lf.trace({ name, metadata });
-  const generation = trace.generation({
+    // Reusing the same id attaches to the existing trace instead of creating
+    // a new one — this is how nested/child calls (e.g. the judge grading an
+    // ask-munin answer) show up as part of the original trace rather than as
+    // their own separate row.
+    const trace = traceId ? lf.trace({ id: traceId }) : lf.trace({ name, metadata });
+    const generation = trace.generation({
     name,
     input: typeof input === "string" ? input.slice(0, 4000) : input,
     model: metadata?.model,

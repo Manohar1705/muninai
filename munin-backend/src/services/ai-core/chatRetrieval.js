@@ -25,13 +25,15 @@ function compact(text) {
 const CASUAL_PATTERN = /^(hi|hello|hey|hii+|thanks|thank you|thx|bye|ok|okay|good morning|good evening)[\s!.?]*$/i;
 
 function termsForRetrieval(question, history = []) {
+  // Check for casual/greeting messages FIRST, before the word-length
+  // filter below — otherwise a 3+ character greeting like "hey" or
+  // "thanks" slips past as a "meaningful term" and triggers a real
+  // knowledge-base search (and a false citation), while only very short
+  // greetings like "hi" or "ok" were ever being caught correctly.
+  if (CASUAL_PATTERN.test(String(question || "").trim())) return [];
+
   const currentTerms = meaningfulTerms(question);
   if (currentTerms.length) return currentTerms;
-
-  // A greeting/small-talk message has no real terms, same as a genuine
-  // follow-up ("and what about invoicing?") — but it should NOT reuse the
-  // prior question's context, unlike a real follow-up.
-  if (CASUAL_PATTERN.test(String(question || "").trim())) return [];
 
   const normalizedQuestion = String(question || "").trim().toLowerCase();
   for (let i = history.length - 1; i >= 0; i -= 1) {
