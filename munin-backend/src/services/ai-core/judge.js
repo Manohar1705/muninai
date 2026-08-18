@@ -26,7 +26,7 @@ Reply with ONLY a JSON object: { "score": <1-5>, "reason": "<one short sentence>
     const judgeModel = process.env.GROQ_JUDGE_MODEL || "openai/gpt-oss-20b";
 
     const parsed = await traceLlmCall(
-      { name: "judge-answer", input: prompt, metadata: { model: judgeModel } },
+      { name: "judge-answer", input: prompt, metadata: { model: judgeModel }, traceId },
       async (reportUsage) => {
         const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
@@ -36,7 +36,7 @@ Reply with ONLY a JSON object: { "score": <1-5>, "reason": "<one short sentence>
           },
           body: JSON.stringify({
             model: judgeModel,
-            max_tokens: 100,
+            max_tokens: 1000,
             temperature: 0,
             response_format: { type: "json_object" },
             messages: [{ role: "user", content: prompt }],
