@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, foreignKey, integer, real, unique } from "drizzle-orm/pg-core"
+import { pgTable, text, serial, timestamp, foreignKey, integer, real, unique, boolean } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 
@@ -8,13 +8,52 @@ export const smes = pgTable("smes", {
 	role: text().notNull(),
 });
 
+// A team is the tenant/organization boundary: engagements belong to exactly
+// one team, and a user belongs to exactly one team.
+export const teams = pgTable("teams", {
+	id: serial().primaryKey().notNull(),
+	name: text().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+});
+
+// isOwner is the team creator — always allowed to create engagements and
+// treated as Admin on every engagement in their team, regardless of any
+// engagement_members row. mustResetPassword is set true whenever an admin
+// (Team Setup) generates a password for someone else, forcing an in-app
+// reset on their first login.
+export const users = pgTable("users", {
+	id: serial().primaryKey().notNull(),
+	teamId: integer("team_id").notNull(),
+	email: text().notNull(),
+	passwordHash: text("password_hash").notNull(),
+	isOwner: boolean("is_owner").default(false).notNull(),
+	mustResetPassword: boolean("must_reset_password").default(false).notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.teamId],
+			foreignColumns: [teams.id],
+			name: "users_team_id_fkey"
+		}).onDelete("cascade"),
+	unique("users_email_key").on(table.email),
+]);
+
 export const engagements = pgTable("engagements", {
 	id: serial().primaryKey().notNull(),
 	name: text().notNull(),
 	phase: text().notNull(),
 	details: text().default("").notNull(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
-});
+	// Every existing row was backfilled to Team Nova before this was tightened.
+	teamId: integer("team_id").notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.teamId],
+			foreignColumns: [teams.id],
+			name: "engagements_team_id_fkey"
+		}).onDelete("cascade"),
+]);
 
 export const sessions = pgTable("sessions", {
 	id: text().primaryKey().notNull(),
@@ -206,3 +245,26 @@ export const meetingTranscriptChunks = pgTable("meeting_transcript_chunks", {
 	timestamp: text(),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
 });
+
+// Per-engagement role assignment \u2014 a user's access level (admin | user) can
+// differ across engagements within the same team. Team Setup manages this
+// mapping for one engagement at a time.
+export const engagementMembers = pgTable("engagement_members", {
+	id: serial().primaryKey().notNull(),
+	engagementId: integer("engagement_id").notNull(),
+	userId: integer("user_id").notNull(),
+	role: text().default('user').notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(),
+}, (table) => [
+	foreignKey({
+			columns: [table.engagementId],
+			foreignColumns: [engagements.id],
+			name: "engagement_members_engagement_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.userId],
+			foreignColumns: [users.id],
+			name: "engagement_members_user_id_fkey"
+		}).onDelete("cascade"),
+	unique("engagement_members_engagement_id_user_id_key").on(table.engagementId, table.userId),
+]);

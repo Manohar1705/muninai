@@ -9,12 +9,14 @@ const {
 
 const router = express.Router();
 
-// GET /api/modules?engagementId=1 — modules for one engagement. Omitting
-// engagementId returns modules across all engagements (kept for the few
-// internal callers, e.g. Ask Munin, that don't have one engagement in scope).
+// GET /api/modules?engagementId=1 — modules for one engagement. engagementId
+// is required: returning modules across all engagements would now cross
+// team boundaries.
 router.get("/", async (req, res) => {
-  const engagementId = req.query.engagementId ? Number(req.query.engagementId) : undefined;
-  res.json(await listModules(engagementId));
+  if (!req.query.engagementId) {
+    return res.status(400).json({ error: "engagementId is required" });
+  }
+  res.json(await listModules(Number(req.query.engagementId)));
 });
 
 router.post("/", async (req, res) => {

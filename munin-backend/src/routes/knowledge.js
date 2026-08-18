@@ -12,17 +12,14 @@ function serialize(k) {
   };
 }
 
-// GET /api/knowledge-objects?module=&type=&q=
-// GET /api/knowledge-objects?module=&type=&q=&engagementId=
+// GET /api/knowledge-objects?module=&type=&q=&engagementId=1
 router.get("/", async (req, res) => {
   const { module, type, q, engagementId } = req.query;
-  let sql = `SELECT ko.* FROM knowledge_objects ko JOIN sessions s ON s.id = ko.session_id WHERE 1=1`;
-  const params = [];
-
-  if (engagementId) {
-    sql += ` AND s.engagement_id = ?`;
-    params.push(Number(engagementId));
+  if (!engagementId) {
+    return res.status(400).json({ error: "engagementId is required" });
   }
+  let sql = `SELECT ko.* FROM knowledge_objects ko JOIN sessions s ON s.id = ko.session_id WHERE s.engagement_id = ?`;
+  const params = [Number(engagementId)];
 
   if (module && module !== "All") {
     sql += ` AND ko.module = ?`;

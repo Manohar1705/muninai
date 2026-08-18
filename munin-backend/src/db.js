@@ -105,12 +105,35 @@ function transaction(fn) {
 const db = { prepare, exec, transaction, pool };
 
 const SCHEMA = `
+-- A team is the tenant/organization boundary: engagements belong to exactly
+-- one team, and a user belongs to exactly one team.
+CREATE TABLE IF NOT EXISTS teams (
+  id SERIAL PRIMARY KEY,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- is_owner is the team creator: always allowed to create engagements and
+-- treated as admin on every engagement in their team. must_reset_password
+-- is set whenever Team Setup generates a password for someone else.
+CREATE TABLE IF NOT EXISTS users (
+  id SERIAL PRIMARY KEY,
+  team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  email TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  is_owner BOOLEAN NOT NULL DEFAULT FALSE,
+  must_reset_password BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS engagements (
   id SERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   phase TEXT NOT NULL,
   details TEXT NOT NULL DEFAULT '',
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  team_id INTEGER NOT NULL REFERENCES teams(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS smes (
@@ -264,6 +287,17 @@ CREATE TABLE IF NOT EXISTS meeting_transcript_chunks (
   text TEXT NOT NULL,
   timestamp TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Per-engagement role assignment: a user's access level (admin | user) can
+-- differ across engagements within the same team.
+CREATE TABLE IF NOT EXISTS engagement_members (
+  id SERIAL PRIMARY KEY,
+  engagement_id INTEGER NOT NULL REFERENCES engagements(id) ON DELETE CASCADE,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role TEXT NOT NULL DEFAULT 'user',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(engagement_id, user_id)
 );
 `;
 

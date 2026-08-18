@@ -11,14 +11,17 @@
     "db:generate": "drizzle-kit generate --config=drizzle.config.cjs",
     "db:migrate": "drizzle-kit migrate --config=drizzle.config.cjs",
     "db:check": "drizzle-kit check --config=drizzle.config.cjs",
+    "backfill:team-nova": "node src/scripts/backfillTeamNova.js",
     "test": "node --test"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "drizzle-orm": "^0.45.2",
     "express": "^4.19.2",
     "express-async-errors": "^3.1.1",
+    "jsonwebtoken": "^9.0.3",
     "langfuse": "^3.29.0",
     "mammoth": "^1.8.0",
     "multer": "^1.4.5-lts.1",

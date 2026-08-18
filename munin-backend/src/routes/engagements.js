@@ -1,8 +1,10 @@
 const express = require("express");
 const { db } = require("../db");
 const { listModules } = require("../services/modules");
+const { requireAuth, requireOwner, requireEngagementAdmin } = require("../middleware/auth");
 
 const router = express.Router();
+router.use(requireAuth());
 
 // Quantitative "pipeline" summary for one engagement: how many modules are
 // defined, how many sessions are planned vs. actually covered across them,
@@ -28,18 +30,28 @@ async function summarizeEngagement(engagementId) {
 router.get("/", async (req, res) => {
   const rows = await db
     .prepare(`
-      SELECT id, name, phase, details
-      FROM engagements
-      ORDER BY created_at DESC
+      SELECT e.id, e.name, e.phase, e.details, em.role AS member_role
+      FROM engagements e
+      LEFT JOIN engagement_members em ON em.engagement_id = e.id AND em.user_id = ?
+      WHERE e.team_id = ?
+      ORDER BY e.created_at DESC
     `)
-    .all();
+    .all(req.user.id, req.user.team_id);
 
+  // The team owner is always admin everywhere; anyone else falls back to
+  // "user" if they were never explicitly added to this engagement (they
+  // can still view it — team visibility isn't membership-gated — but the
+  // frontend uses this to hide admin-only pages for them).
   const result = await Promise.all(
-    rows.map(async (row) => ({ ...row, stats: await summarizeEngagement(row.id) }))
+    rows.map(async ({ member_role, ...row }) => ({
+      ...row,
+      role: req.user.is_owner ? "admin" : (member_role || "user"),
+      stats: await summarizeEngagement(row.id),
+    }))
   );
   res.json(result);
 });
-router.post("/", async (req, res) => {
+router.post("/", requireOwner, async (req, res) => {
   const { name, phase, details } = req.body || {};
 
   if (!name || !phase) {
@@ -50,11 +62,11 @@ router.post("/", async (req, res) => {
 
   const result = await db
     .prepare(`
-      INSERT INTO engagements (name, phase, details)
-      VALUES (?, ?, ?)
+      INSERT INTO engagements (name, phase, details, team_id)
+      VALUES (?, ?, ?, ?)
       RETURNING id
     `)
-    .run(name.trim(), phase.trim(), (details || "").trim());
+    .run(name.trim(), phase.trim(), (details || "").trim(), req.user.team_id);
 
   const engagement = await db
     .prepare(`
@@ -64,9 +76,17 @@ router.post("/", async (req, res) => {
     `)
     .get(result.lastInsertRowid);
 
+  // The creator is always an admin on their own engagement (redundant with
+  // the isOwner bypass, but keeps Team Setup's member list accurate).
+  await db.prepare(`
+    INSERT INTO engagement_members (engagement_id, user_id, role)
+    VALUES (?, ?, 'admin')
+    ON CONFLICT (engagement_id, user_id) DO NOTHING
+  `).run(engagement.id, req.user.id);
+
   res.json({ ...engagement, stats: await summarizeEngagement(engagement.id) });
 });
-router.patch("/:id", async (req, res) => {
+router.patch("/:id", requireEngagementAdmin("id"), async (req, res) => {
   const { name, details } = req.body || {};
 
   if (!name || !name.trim()) {
@@ -75,15 +95,7 @@ router.patch("/:id", async (req, res) => {
     });
   }
 
-  const existing = await db
-    .prepare(`SELECT * FROM engagements WHERE id = ?`)
-    .get(req.params.id);
-
-  if (!existing) {
-    return res.status(404).json({
-      error: "Engagement not found",
-    });
-  }
+  const existing = req.engagement;
 
   await db.prepare(`
     UPDATE engagements
@@ -104,11 +116,8 @@ router.patch("/:id", async (req, res) => {
 // stricter "completed_sessions" definition used elsewhere. An engagement
 // delete is more destructive (cascades modules/sessions/meetings via
 // ON DELETE CASCADE), so this errs on the safe side.
-router.delete("/:id", async (req, res) => {
-  const engagement = await db.prepare(`SELECT * FROM engagements WHERE id = ?`).get(req.params.id);
-  if (!engagement) {
-    return res.status(404).json({ error: "Engagement not found" });
-  }
+router.delete("/:id", requireEngagementAdmin("id"), async (req, res) => {
+  const engagement = req.engagement;
 
   const usage = await db.prepare(`
     SELECT

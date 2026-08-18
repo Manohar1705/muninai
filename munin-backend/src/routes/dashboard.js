@@ -9,7 +9,10 @@ const router = express.Router();
 // derived from listModules(engagementId) (planned vs. actually covered
 // sessions per module) rather than a separate, independently-tracked score.
 router.get("/", async (req, res) => {
-  const engagementId = req.query.engagementId ? Number(req.query.engagementId) : undefined;
+  if (!req.query.engagementId) {
+    return res.status(400).json({ error: "engagementId is required" });
+  }
+  const engagementId = Number(req.query.engagementId);
   const modules = await listModules(engagementId);
 
   const modulesCovered = modules.filter((m) => (m.completed_sessions || 0) > 0).length;

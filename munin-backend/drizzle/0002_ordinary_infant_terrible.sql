@@ -1,0 +1,1 @@
+ALTER TABLE "engagements" ALTER COLUMN "team_id" SET NOT NULL;

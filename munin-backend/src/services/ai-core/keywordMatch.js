@@ -4,6 +4,10 @@ const STOPWORDS = new Set([
   "the", "a", "an", "is", "are", "was", "were", "what", "how", "why", "when",
   "does", "do", "for", "of", "to", "in", "on", "and", "or", "if", "it", "who",
   "will", "can", "should", "there", "with", "this", "that", "be", "have",
+  // Pronouns carry no topical/module-matching signal, but without them a
+  // question like "did we discuss it" tokenizes to a "meaningful" ["we"]
+  // that masks the real topic in chatRetrieval's history look-back.
+  "we", "you", "i", "me", "us", "our", "your", "my", "mine", "they", "them", "he", "she", "his", "her", "its",
 ]);
 
 const UNCLASSIFIED_MODULE = "Unclassified";

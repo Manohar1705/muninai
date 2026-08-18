@@ -73,7 +73,10 @@ async function computeModuleContribution(sessionIds) {
 
 // GET /api/sme-map?engagementId=1
 router.get("/", async (req, res) => {
-  const engagementId = req.query.engagementId ? Number(req.query.engagementId) : undefined;
+  if (!req.query.engagementId) {
+    return res.status(400).json({ error: "engagementId is required" });
+  }
+  const engagementId = Number(req.query.engagementId);
   const modules = await listModules(engagementId);
 
   const riskRows = await db.prepare(`SELECT module FROM key_person_risk`).all();
