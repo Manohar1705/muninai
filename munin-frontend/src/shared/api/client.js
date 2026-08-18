@@ -3,11 +3,35 @@
 // (e.g. VITE_API_BASE=https://api.example.com/api) if not running locally.
 const API_BASE = import.meta.env?.VITE_API_BASE || "http://localhost:4000/api";
 
+// Single source of truth for where the JWT lives — AuthContext reads/writes
+// through these helpers too, rather than touching localStorage directly, so
+// there's exactly one key name and one storage mechanism to change later.
+const TOKEN_STORAGE_KEY = "munin.token";
+
+function getToken() {
+  return localStorage.getItem(TOKEN_STORAGE_KEY);
+}
+function setToken(token) {
+  if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  else localStorage.removeItem(TOKEN_STORAGE_KEY);
+}
+function authHeader() {
+  const token = getToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function apiRequest(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers: { "Content-Type": "application/json", ...authHeader(), ...(options.headers || {}) },
     ...options,
   });
+  if (res.status === 401) {
+    // Missing/invalid/expired token — no local recovery is possible, so
+    // clear it and let AuthContext drop the whole app back to the login
+    // screen instead of every caller having to special-case this.
+    setToken(null);
+    window.dispatchEvent(new Event("munin:auth:unauthorized"));
+  }
   if (!res.ok) {
     let detail = "";
     try { detail = (await res.json()).error || ""; } catch { /* ignore */ }
@@ -22,9 +46,13 @@ async function apiRequest(path, options = {}) {
 // that the caller needs, not just a message.
 async function apiRequestSoft(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    headers: { "Content-Type": "application/json", ...authHeader(), ...(options.headers || {}) },
     ...options,
   });
+  if (res.status === 401) {
+    setToken(null);
+    window.dispatchEvent(new Event("munin:auth:unauthorized"));
+  }
   let data = null;
   try { data = res.status === 204 ? null : await res.json(); } catch { /* ignore */ }
   return { ok: res.ok, status: res.status, data };
@@ -34,7 +62,11 @@ async function apiRequestSoft(path, options = {}) {
 // since that hardcodes a JSON Content-Type header that would break the
 // browser's auto-generated multipart boundary.
 async function apiUpload(path, formData) {
-  const res = await fetch(`${API_BASE}${path}`, { method: "POST", body: formData });
+  const res = await fetch(`${API_BASE}${path}`, { method: "POST", body: formData, headers: authHeader() });
+  if (res.status === 401) {
+    setToken(null);
+    window.dispatchEvent(new Event("munin:auth:unauthorized"));
+  }
   let data = null;
   try { data = res.status === 204 ? null : await res.json(); } catch { /* ignore */ }
   return { ok: res.ok, status: res.status, data };
@@ -76,4 +108,6 @@ export {
   apiUpload,
   invalidateEngagementScopedQueries,
   api,
+  getToken,
+  setToken,
 };

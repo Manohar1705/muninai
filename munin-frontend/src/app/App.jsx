@@ -23,6 +23,12 @@ import { API_BASE } from "../shared/api/client";
 import { useQuery, useQueryClient, } from "@tanstack/react-query";
 import EngagementSetupPage from "../features/engagement/EngagementSetupPage";
 import StarterPage from "../features/starter/StarterPage";
+import TeamSetupPage from "../features/team/TeamSetupPage";
+import LoginPage from "../features/auth/LoginPage";
+import RegisterPage from "../features/auth/RegisterPage";
+import ForgotPasswordPage from "../features/auth/ForgotPasswordPage";
+import ResetPasswordPage from "../features/auth/ResetPasswordPage";
+import { useAuth } from "../shared/auth/AuthContext";
 import { useEngagement } from "../features/engagement/hooks/useEngagement";
 import { useCurrentEngagement } from "../shared/hooks/useCurrentEngagement";
 import { useConfigBanner } from "../shared/hooks/useConfigBanner";
@@ -33,6 +39,7 @@ export default function App() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
+  const { isAuthenticated, mustResetPassword, loading: authLoading } = useAuth();
   // react-router doesn't reset scroll position on navigation (that's a
   // browser-native MPA behavior, not something SPAs get for free) — without
   // this, navigating from a long, scrolled-down page to a shorter one just
@@ -41,14 +48,50 @@ export default function App() {
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [location.pathname]);
+
+  // A signed-in session has no business sitting on /login or /register —
+  // send it back into the app instead of rendering a blank screen (neither
+  // path is a Route the authenticated view below knows about).
+  useEffect(() => {
+    if (isAuthenticated && !mustResetPassword && ["/login", "/register", "/forgot-password"].includes(location.pathname)) {
+      navigate("/", { replace: true });
+    }
+  }, [isAuthenticated, mustResetPassword, location.pathname, navigate]);
+
   // The engagement currently in view — modules, sessions, meetings, and the
   // dashboard/SME-map pipeline are all scoped to this one engagement.
   // Persisted so a refresh doesn't drop the user back to the Starter page.
-const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
-  const { engagements, setEngagements } = useEngagement(currentEngagementId);
+  const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
+  const { engagements } = useEngagement(currentEngagementId, isAuthenticated && !mustResetPassword);
   const { configStatus, showBanner, dismissBanner } = useConfigBanner();
-    
-  
+
+  if (authLoading) {
+    return (
+      <div style={{ fontFamily: FF.sans, background: C.bg, color: C.textFaint, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>
+        <style>{FONT_IMPORT}</style>
+        Loading…
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div style={{ fontFamily: FF.sans, background: C.bg, color: C.text, minHeight: "100vh" }}>
+        <style>{FONT_IMPORT}</style>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="*" element={<Navigate to="/login" replace state={{ from: location.pathname }} />} />
+        </Routes>
+      </div>
+    );
+  }
+
+  if (mustResetPassword) {
+    return <ResetPasswordPage />;
+  }
+
   if (!currentEngagementId) {
     return (
       <ToastProvider>
@@ -66,13 +109,14 @@ const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
   }
 
   const currentEngagement = engagements.find((e) => e.id === currentEngagementId);
-
+  const isEngagementAdmin = currentEngagement?.role === "admin";
 
   return (
     <ToastProvider>
     <div style={{ fontFamily: FF.sans, background: C.bg, color: C.text, display: "flex", minHeight: 640, borderRadius: 12, overflow: "hidden", border: `1px solid ${C.border}` }}>
       <style>{FONT_IMPORT}</style>
       <Sidebar
+        isEngagementAdmin={isEngagementAdmin}
         onSwitchEngagement={() => setCurrentEngagementId(null)}
       />
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -159,12 +203,17 @@ const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
           />
           <Route
             path="/engagement-setup"
-            element={<EngagementSetupPage engagementId={currentEngagementId} />}
+            element={isEngagementAdmin ? <EngagementSetupPage engagementId={currentEngagementId} /> : <Navigate to="/dashboard" replace />}
+          />
+          <Route
+            path="/team-setup"
+            element={isEngagementAdmin ? <TeamSetupPage engagementId={currentEngagementId} /> : <Navigate to="/dashboard" replace />}
           />
           <Route
             path="/llm-insights"
-            element={<TraceabilityPage />}
+            element={isEngagementAdmin ? <TraceabilityPage /> : <Navigate to="/dashboard" replace />}
           />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
        
       </div>

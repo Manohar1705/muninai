@@ -12,10 +12,12 @@ import {
   btnPrimary,
   btnGhost,
   Input,
+  HeroGlow,
 } from "../../shared/components/common";
 import { PHASES } from "../../shared/constants/constants";
 
 import { engagementApi } from "../engagement/api";
+import { useAuth } from "../../shared/auth/AuthContext";
 /* ============================== STARTER PAGE ============================== */
 // Home/landing screen for picking (or starting) an engagement. This is the
 // "source of truth" list of engagements — each one owns its own modules,
@@ -28,36 +30,6 @@ import { engagementApi } from "../engagement/api";
 // full-screen new-engagement flow) — see NewEngagementView below.
 
 const EASE = [0.4, 0, 0.2, 1];
-
-function HeroGlow() {
-  return (
-    <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", zIndex: 0 }}>
-      <div
-        style={{
-          position: "absolute",
-          top: -220,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: 820,
-          height: 520,
-          borderRadius: "50%",
-          background: "radial-gradient(closest-side, rgba(217,164,65,0.14), rgba(217,164,65,0) 72%)",
-        }}
-      />
-      <div
-        style={{
-          position: "absolute",
-          top: -60,
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: 1200,
-          height: 1,
-          background: "linear-gradient(90deg, transparent, rgba(245,243,238,0.08), transparent)",
-        }}
-      />
-    </div>
-  );
-}
 
 function StatStrip({ engagements }) {
   const totals = useMemo(() => {
@@ -280,6 +252,7 @@ function NewEngagementView({ onCreated, onCancel }) {
 
 function StarterPage({ onSelectEngagement }) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [view, setView] = useState("home"); // "home" | "create"
 
   const {
@@ -317,6 +290,11 @@ function StarterPage({ onSelectEngagement }) {
               <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
                 <div style={{ color: C.amber }}><IconRaven size={30} /></div>
                 <div style={{ fontSize: 22, fontWeight: 500, color: C.text }}>Munin</div>
+                {user?.teamName && (
+                  <span style={{ fontSize: 12, color: C.amber, background: C.amberSofter, border: "1px solid rgba(217,164,65,0.3)", borderRadius: 20, padding: "3px 11px" }}>
+                    {user.teamName}
+                  </span>
+                )}
               </div>
               <div style={{ fontSize: 15, color: C.textMuted, marginBottom: 8, maxWidth: 560, lineHeight: 1.5 }}>
                 The agent that remembers everything.
@@ -336,9 +314,12 @@ function StarterPage({ onSelectEngagement }) {
 
               {!loading && !error && (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 16 }}>
-                  <NewEngagementTile onClick={() => setView("create")} index={0} />
+                  {/* Only the team owner may create engagements — the backend
+                      enforces this too, this just avoids showing a tile
+                      that would 403. */}
+                  {user?.isOwner && <NewEngagementTile onClick={() => setView("create")} index={0} />}
                   {engagements.map((e, i) => (
-                    <EngagementCard key={e.id} engagement={e} index={i + 1} onSelect={onSelectEngagement} />
+                    <EngagementCard key={e.id} engagement={e} index={i + (user?.isOwner ? 1 : 0)} onSelect={onSelectEngagement} />
                   ))}
                 </div>
               )}

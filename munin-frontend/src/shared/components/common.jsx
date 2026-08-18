@@ -130,6 +130,38 @@ function Input({ style, ...rest }) {
     />
   );
 }
+// Ambient amber glow used behind full-bleed entry screens (Starter, Login,
+// Register) so they read as one consistent "welcome" moment rather than the
+// flat, purely-functional look of the in-app feature pages.
+function HeroGlow() {
+  return (
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none", zIndex: 0 }}>
+      <div
+        style={{
+          position: "absolute",
+          top: -220,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 820,
+          height: 520,
+          borderRadius: "50%",
+          background: "radial-gradient(closest-side, rgba(217,164,65,0.14), rgba(217,164,65,0) 72%)",
+        }}
+      />
+      <div
+        style={{
+          position: "absolute",
+          top: -60,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 1200,
+          height: 1,
+          background: "linear-gradient(90deg, transparent, rgba(245,243,238,0.08), transparent)",
+        }}
+      />
+    </div>
+  );
+}
 function Modal({ children, onClose, align = "center" }) {
   return (
     <div
@@ -193,4 +225,5 @@ export {
   ProgressBar,
   btnPrimary,
   btnGhost,
+  HeroGlow,
 };
