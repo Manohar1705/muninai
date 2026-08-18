@@ -8,21 +8,27 @@
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
     "seed": "node src/seed.js",
+    "db:introspect": "drizzle-kit pull --config=drizzle.config.cjs",
+    "db:generate": "drizzle-kit generate --config=drizzle.config.cjs",
+    "db:migrate": "drizzle-kit migrate --config=drizzle.config.cjs",
+    "db:check": "drizzle-kit check --config=drizzle.config.cjs",
     "test": "node --test"
   },
   "dependencies": {
-    "pg": "^8.13.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "drizzle-orm": "^0.45.2",
     "express": "^4.19.2",
     "express-async-errors": "^3.1.1",
-    "nanoid": "^3.3.7",
-    "multer": "^1.4.5-lts.1",
-    "pdf-parse": "^1.1.1",
+    "langfuse": "^3.29.0",
     "mammoth": "^1.8.0",
-    "langfuse": "^3.29.0"
+    "multer": "^1.4.5-lts.1",
+    "nanoid": "^3.3.7",
+    "pdf-parse": "^1.1.1",
+    "pg": "^8.13.0"
   },
   "devDependencies": {
+    "drizzle-kit": "^0.31.10",
     "nodemon": "^3.1.4"
   },
   "engines": {

@@ -65,7 +65,7 @@ The backend integrates with Recall.ai for meeting participation, Groq for AI-pow
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 22
 - npm
 - Git
 - Cloudflared
@@ -641,6 +641,18 @@ Useful during demonstrations and testing.
 ## Database
 
 Munin uses the PostgreSQL database configured by the five `DB_*` environment variables. Tables and demo data are initialized automatically during startup.
+
+### Schema migrations
+
+The existing RDS schema is captured in `drizzle/schema.ts`. For a schema change:
+
+1. Edit `drizzle/schema.ts`.
+2. Run `npm run db:generate` and review the new SQL file in `drizzle/`.
+3. Run `npm run db:migrate` before starting the new application version.
+
+In CodeBuild, run `npm run db:migrate` after `npm ci` and before deploying or starting the ECS task. CodeBuild must be able to reach RDS and must receive the same `DB_*` and `PGSSL` environment variables as the backend.
+
+`npm run db:introspect` reads an existing database back into the Drizzle schema. It is intended for initial setup or deliberate resynchronization, not the normal deployment flow.
 
 ### Reset Demo Data
 
