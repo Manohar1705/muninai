@@ -50,15 +50,14 @@ function ForgotPasswordPage() {
           {submitted ? (
             <div>
               <div style={{ fontSize: 13, color: C.textMuted, lineHeight: 1.6, marginBottom: 20 }}>
-                If an account exists for that email, a temporary password has been sent.
-                If you don't have an account yet, ask your engagement admin to add you in Team Setup.
+                Please contact your team admin to reset your password from Team Setup.
               </div>
               <Link to="/login" style={{ color: C.amber, fontSize: 12.5 }}>Back to login</Link>
             </div>
           ) : (
             <>
               <div style={{ fontSize: 12.5, color: C.textFaint, marginBottom: 24 }}>
-                Enter your account email — we'll send a temporary password if it's on file.
+                Enter your account email to continue.
               </div>
               <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 <div>
@@ -66,7 +65,7 @@ function ForgotPasswordPage() {
                   <Input type="email" autoFocus required value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} />
                 </div>
                 <button type="submit" disabled={submitting} style={{ ...btnPrimary, justifyContent: "center", marginTop: 6, opacity: submitting ? 0.7 : 1 }}>
-                  {submitting ? "Sending…" : "Send temporary password"}
+                  {submitting ? "Submitting…" : "Continue"}
                 </button>
               </form>
               <div style={{ fontSize: 12.5, color: C.textFaint, marginTop: 20, textAlign: "center" }}>

@@ -97,8 +97,7 @@ const forgotPasswordCooldowns = new Map();
 router.post("/forgot-password", async (req, res) => {
   const normalizedEmail = normalizeEmail(req.body?.email);
   const genericResponse = {
-    message: "If an account exists for that email, a temporary password has been sent. " +
-      "If you don't have an account yet, ask your engagement admin to add you in Team Setup.",
+    message: "Please contact your team admin to reset your password from Team Setup.",
   };
 
   if (!EMAIL_RE.test(normalizedEmail)) {
