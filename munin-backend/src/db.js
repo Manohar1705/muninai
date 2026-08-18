@@ -1,18 +1,5 @@
 const { Pool, types } = require("pg");
 const { AsyncLocalStorage } = require("async_hooks");
-const {
-  ENGAGEMENT,
-  READINESS_INITIAL,
-  SME_ROLES,
-  SESSIONS_SEED,
-  KNOWLEDGE_OBJECTS_SEED,
-  KT_TOPICS_SEED,
-  GAPS_SEED,
-  SME_MAP_SEED,
-  KEY_PERSON_RISK_MODULES,
-  ACTIVITY_SEED,
-  CHAT_SEED,
-} = require("./data/seedData");
 
 // node-postgres returns BIGINT (e.g. every `COUNT(*)`) as a string by
 // default, to avoid silent precision loss for huge counts. This app's
@@ -21,9 +8,6 @@ const {
 // normal JS number globally instead of touching every call site.
 types.setTypeParser(20, (val) => parseInt(val, 10));
 
-// Keep the five database connection values explicit in the environment and
-// construct the standard PostgreSQL URL here. encodeURIComponent makes raw
-// usernames/passwords containing characters such as @, :, /, or # safe.
 const REQUIRED_DB_ENV = ["DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"];
 const missingDbEnv = REQUIRED_DB_ENV.filter((name) => !process.env[name]);
 if (missingDbEnv.length) {
@@ -41,31 +25,15 @@ const connectionString =
   `@${process.env.DB_HOST}:${dbPort}` +
   `/${encodeURIComponent(process.env.DB_NAME)}`;
 
-// RDS requires SSL by default. Set PGSSL=disable for a local Postgres
-// instance without SSL (e.g. a local Docker container for dev).
 const pool = new Pool({
   connectionString,
   ssl: process.env.PGSSL === "disable" ? false : { rejectUnauthorized: false },
 });
 
 pool.on("error", (err) => {
-  // Errors on idle pooled clients (e.g. RDS dropping a connection) — log
-  // instead of crashing the whole process.
   console.error("Unexpected Postgres pool error:", err.message);
 });
 
-// --- better-sqlite3-shaped compatibility layer -----------------------------
-// The rest of this codebase (routes/services) was written against
-// better-sqlite3's synchronous `db.prepare(sql).get/all/run(...)` API, using
-// two placeholder styles: positional `?` and named `@field`. Rather than
-// hand-rewrite every query's placeholders into Postgres's `$1, $2, ...`,
-// this shim keeps the exact same call shape — every method is now async
-// (call sites must `await` it) — and translates both placeholder styles
-// automatically.
-
-// So a `db.transaction(fn)` callback's queries all run on the SAME checked-
-// out client (required for BEGIN/COMMIT to actually wrap them, instead of
-// each query grabbing a random connection from the pool).
 const txContext = new AsyncLocalStorage();
 function getClient() {
   return txContext.getStore() || pool;
@@ -113,15 +81,10 @@ function prepare(sql) {
   };
 }
 
-// Raw SQL (schema DDL, bulk deletes) — no placeholders.
 async function exec(sql) {
   await getClient().query(sql);
 }
 
-// Mirrors better-sqlite3's `db.transaction(fn)`: returns a function that,
-// when called (and awaited), runs `fn` inside BEGIN/COMMIT, rolling back on
-// any error. Unlike the old sync version, `fn` must be `async` and must
-// `await` its own queries.
 function transaction(fn) {
   return async (...args) => {
     const client = await pool.connect();
@@ -163,7 +126,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   date TEXT NOT NULL,
   duration TEXT NOT NULL,
   status TEXT NOT NULL,
-  attendees TEXT NOT NULL, -- JSON array of names
+  attendees TEXT NOT NULL,
   engagement_id INTEGER REFERENCES engagements(id) ON DELETE CASCADE,
   source_type TEXT NOT NULL DEFAULT 'kt_session'
 );
@@ -185,7 +148,7 @@ CREATE TABLE IF NOT EXISTS knowledge_objects (
   description TEXT NOT NULL,
   confidence REAL NOT NULL,
   needs_review INTEGER NOT NULL,
-  source TEXT NOT NULL,          -- human readable "Session title, HH:MM:SS"
+  source TEXT NOT NULL,
   session_id TEXT REFERENCES sessions(id) ON DELETE SET NULL,
   segment_timestamp TEXT,
   speaker TEXT                   -- who this fact is attributed to (meetings
@@ -497,6 +460,5 @@ async function resetDemoData() {
 // migration to add.
 async function initDb() {
   await db.exec(SCHEMA);
-  await seedIfEmpty();
 }
-module.exports = { db, initDb, resetDemoData };
+module.exports = { db, initDb };

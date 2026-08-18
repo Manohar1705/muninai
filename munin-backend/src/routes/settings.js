@@ -1,5 +1,4 @@
 const express = require("express");
-const { resetDemoData } = require("../db");
 const { isGroqConfigured } = require("../services/ai-core/llm");
 const { isRecallConfigured, buildWebhookUrl } = require("../services/meetingBot");
 const { isLangfuseConfigured } = require("../services/observability");
@@ -17,9 +16,5 @@ router.get("/status", (req, res) => {
     langfuseConfigured: isLangfuseConfigured(),
   });
 });
-
-// POST /api/settings/reset — wipes and re-seeds all demo data so the
-// walkthrough (including the Session 9 upload) is repeatable.
-
 
 module.exports = router;

@@ -56,7 +56,7 @@ The backend integrates with Recall.ai for meeting participation, Groq for AI-pow
 - Automatic Cloudflare Tunnel startup
 - Runtime public URL generation
 - Externalized prompts
-- PostgreSQL schema initialization and safe demo seeding
+- PostgreSQL schema initialization
 - Optional observability with Langfuse
 
 ---
@@ -97,7 +97,7 @@ For production:
 npm start
 ```
 
-The PostgreSQL schema and demo seed data are created automatically during startup. The database itself must already exist.
+The PostgreSQL schema is initialized during startup. The database itself must already exist.
 
 ---
 
