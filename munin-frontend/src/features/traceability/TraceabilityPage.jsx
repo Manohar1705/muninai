@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery } from "@tanstack/react-query";
-import { API_BASE } from "../../shared/api/client";
+import { apiRequest } from "../../shared/api/client";
 import { C, FF, Section, Card } from "../../shared/components/common";
 
 // Internal-only page — not linked from Sidebar.jsx on purpose. Reachable
@@ -10,9 +10,7 @@ export default function TraceabilityPage() {
   const { data, error: queryError } = useQuery({
     queryKey: ["traceability-traces"],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/traceability/traces`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Failed to load traces");
+      const json = await apiRequest("/traceability/traces");
       return json.data || [];
     },
     // Auto-refresh in the background — no manual button needed. 15s is a
