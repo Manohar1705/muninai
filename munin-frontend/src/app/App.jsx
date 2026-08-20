@@ -211,7 +211,7 @@ export default function App() {
           />
           <Route
             path="/llm-insights"
-            element={isEngagementAdmin ? <TraceabilityPage /> : <Navigate to="/dashboard" replace />}
+            element={isEngagementAdmin ? <TraceabilityPage engagementId={currentEngagementId} /> : <Navigate to="/dashboard" replace />}
           />
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

@@ -63,7 +63,7 @@ router.post("/upload", upload.single("file"), async (req, res) => {
 
   let transcript;
   try {
-    transcript = await transcribeAudio(req.file.buffer, req.file.originalname);
+    transcript = await transcribeAudio(req.file.buffer, req.file.originalname, engagementId);
   } catch (err) {
     return res.status(502).json({ error: `Speech-to-text failed: ${err.message}` });
   }

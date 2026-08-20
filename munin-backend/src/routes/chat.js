@@ -619,7 +619,7 @@ router.post("/", async (req, res) => {
      
 
       
-      const result = await askLlm(message, candidates, history, dbContext, conversationStats);  
+      const result = await askLlm(message, candidates, history, dbContext, conversationStats, engagementId);  
       if (result.mode === "chat") {
         reply = result.answer;
         isGap = false;

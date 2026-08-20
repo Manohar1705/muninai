@@ -6,13 +6,14 @@ import { C, FF, Section, Card } from "../../shared/components/common";
 // Internal-only page — not linked from Sidebar.jsx on purpose. Reachable
 // only by navigating to /traceability directly. Shows recent Langfuse
 // traces (cost, tokens, latency) for verification, not end-user use.
-export default function TraceabilityPage() {
+export default function TraceabilityPage({ engagementId }) {
   const { data, error: queryError } = useQuery({
-    queryKey: ["traceability-traces"],
+    queryKey: ["traceability-traces", engagementId],
     queryFn: async () => {
-      const json = await apiRequest("/traceability/traces");
+      const json = await apiRequest(`/traceability/traces?engagementId=${encodeURIComponent(engagementId)}`);
       return json.data || [];
     },
+    enabled: Boolean(engagementId),
     // Auto-refresh in the background — no manual button needed. 15s is a
     // reasonable balance: fast enough to feel "live", not so frequent it
     // risks Langfuse's rate limit (15 requests/min on the free tier).

@@ -54,7 +54,13 @@ function getClient() {
     // a new one — this is how nested/child calls (e.g. the judge grading an
     // ask-munin answer) show up as part of the original trace rather than as
     // their own separate row.
-    const trace = traceId ? lf.trace({ id: traceId }) : lf.trace({ name, metadata });
+    const trace = traceId
+      ? lf.trace({ id: traceId })
+      : lf.trace({
+          name,
+          metadata,
+          sessionId: metadata?.engagementId ? `engagement:${metadata.engagementId}` : undefined,
+        });
     const generation = trace.generation({
     name,
     input: typeof input === "string" ? input.slice(0, 4000) : input,
@@ -84,7 +90,7 @@ function getClient() {
     generation.end({
       output: typeof result === "string" ? result.slice(0, 4000) : result,
       usage: usage || undefined,
-      metadata: { latencyMs: Date.now() - startedAt },
+      metadata: { ...metadata, latencyMs: Date.now() - startedAt },
     });
     // Fire-and-forget: don't let a slow/failed flush add latency to the
     // actual request, and never let it surface as an error to the caller.
@@ -94,7 +100,7 @@ function getClient() {
     generation.end({
       level: "ERROR",
       statusMessage: err.message,
-      metadata: { latencyMs: Date.now() - startedAt },
+      metadata: { ...metadata, latencyMs: Date.now() - startedAt },
     });
     lf.flushAsync().catch(() => {});
     throw err; // tracing never swallows the real error

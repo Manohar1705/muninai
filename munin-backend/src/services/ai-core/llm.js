@@ -54,7 +54,7 @@ async function extractKnowledgeFromText(text, sourceLabel, engagementId) {
   const knownModuleNames = (await listModules(engagementId)).map((m) => m.name);
   const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
-  return traceLlmCall({ name: "extract-knowledge", input: prompt, metadata: { model, sourceLabel } }, async (reportUsage) => {
+  return traceLlmCall({ name: "extract-knowledge", input: prompt, metadata: { model, sourceLabel, engagementId } }, async (reportUsage) => {
     const response = await fetch(GROQ_API_URL, {
       method: "POST",
       headers: {
@@ -233,7 +233,7 @@ ${(dbContext.meetingSummary || [])
 }
 
 
-async function askLlm(question, knowledgeObjects, history = [], dbContext = {}, conversationStats = {}) {
+async function askLlm(question, knowledgeObjects, history = [], dbContext = {}, conversationStats = {}, engagementId = null) {
   const candidates = shortlistCandidates(question, knowledgeObjects, history, 25);
   const system = buildSystemPrompt(candidates, dbContext, conversationStats);
   const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
@@ -246,7 +246,7 @@ async function askLlm(question, knowledgeObjects, history = [], dbContext = {}, 
     content: h.text,
   }));
  
-  return traceLlmCall({ name: "ask-munin", input: question, metadata: { model, candidateCount: candidates.length, historyTurns: history.length } }, async (reportUsage, traceId) => {
+  return traceLlmCall({ name: "ask-munin", input: question, metadata: { model, candidateCount: candidates.length, historyTurns: history.length, engagementId } }, async (reportUsage, traceId) => {
     const response = await fetch(GROQ_API_URL, {
       method: "POST",
       headers: {
@@ -309,14 +309,14 @@ async function askLlm(question, knowledgeObjects, history = [], dbContext = {}, 
  * directly (it extracts the audio track itself for video containers, no
  * ffmpeg needed on our side) — capped at 25MB on direct upload.
  */
-async function transcribeAudio(buffer, filename) {
+async function transcribeAudio(buffer, filename, engagementId = null) {
   if (!isGroqConfigured()) {
     throw new Error("GROQ_API_KEY is not set — cannot run speech-to-text.");
   }
 
   const model = process.env.GROQ_WHISPER_MODEL || "whisper-large-v3-turbo";
 
-  return traceLlmCall({ name: "transcribe-audio", input: `[audio file: ${filename}, ${buffer.length} bytes]`, metadata: { model, filename } }, async (reportUsage) => {
+  return traceLlmCall({ name: "transcribe-audio", input: `[audio file: ${filename}, ${buffer.length} bytes]`, metadata: { model, filename, engagementId } }, async (reportUsage) => {
     const form = new FormData();
     form.append("file", new Blob([buffer]), filename);
     form.append("model", model);
