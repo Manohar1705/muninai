@@ -53,4 +53,14 @@ export const chatApi = {
         engagementId,
       }),
     }),
+
+  generateBrd: (engagementId, options = {}) =>
+    apiRequest("/chat/brd", {
+      method: "POST",
+      body: JSON.stringify({
+        engagementId,
+        module: options.module,
+        sessionId: options.sessionId,
+      }),
+    }),
 };

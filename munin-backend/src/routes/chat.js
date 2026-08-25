@@ -2,12 +2,19 @@ const express = require("express");
 const { nanoid } = require("nanoid");
 const { db } = require("../db");
 const { findBestMatch, guessModule } = require("../services/ai-core/keywordMatch");
-const { isLlmConfigured, askLlm } = require("../services/ai-core/llm");
+const { isLlmConfigured, askLlm, generateBrd } = require("../services/ai-core/llm");
 
 const router = express.Router();
 
 const NOT_COVERED_TEXT = "This hasn't been covered in KT yet — I've logged it as a gap.";
-
+function isBrdRequest(message) {
+  const q = message.toLowerCase();
+  return (
+    q.includes("brd") ||
+    q.includes("business requirement") ||
+    q.includes("requirement document")
+  );
+}
 async function loadKnowledgeObjects(engagementId) {
   const rows = await db.prepare(`
     SELECT ko.*, s.title AS "sessionTitle" FROM knowledge_objects ko
@@ -674,6 +681,41 @@ router.post("/", async (req, res) => {
     loggedGapId,
     usedLlm,
   });
+});
+
+// POST /api/chat/brd  { engagementId, module?, sessionId? }
+router.post("/brd", async (req, res) => {
+  const { engagementId, module: moduleFilter, sessionId } = req.body || {};
+
+  if (!engagementId) {
+    return res.status(400).json({ error: "engagementId is required" });
+  }
+
+  try {
+    let knowledgeObjects = await loadKnowledgeObjects(engagementId);
+    let scopeLabel = "Whole engagement";
+
+    if (sessionId) {
+      knowledgeObjects = knowledgeObjects.filter((k) => String(k.sessionId) === String(sessionId));
+      scopeLabel = `Session ${sessionId}`;
+    } else if (moduleFilter) {
+      knowledgeObjects = knowledgeObjects.filter((k) => k.module === moduleFilter);
+      scopeLabel = `Module: ${moduleFilter}`;
+    }
+
+    const engagement = await db.prepare(`SELECT name, phase FROM engagements WHERE id = ?`).get(engagementId);
+    const brd = await generateBrd(knowledgeObjects, engagement, scopeLabel);
+
+    res.json({
+      brd,
+      scopeLabel,
+      objectCount: knowledgeObjects.length,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error("BRD ERROR:", err);
+    res.status(500).json({ error: "Failed to generate BRD. Please try again later." });
+  }
 });
 
 module.exports = router;

@@ -9,13 +9,18 @@ import {
   btnPrimary,
   btnGhost,
   Input,
+  FF,
 } from "../../shared/components/common";
 
 
 import ChatSidebar from "./ui/ChatSidebar";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useChat } from "./hooks/useChat";
 import { useNavigate } from "react-router-dom";
+import { chatApi } from "./api";
+import { useModules } from "../../shared/hooks/useModules";
+import { Document, Packer, Paragraph, HeadingLevel } from "docx";
+import jsPDF from "jspdf";
 /* ============================== ASK MUNIN (CHAT) ============================== */
 
 function AskMunin({ engagementId }) {
@@ -24,6 +29,13 @@ function AskMunin({ engagementId }) {
   const [activeId, setActiveId] = useState(() => localStorage.getItem(activeConversationKey) || null);
   const [input, setInput] = useState("");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [brdOpen, setBrdOpen] = useState(false);
+  const [brdLoading, setBrdLoading] = useState(false);
+  const [brdText, setBrdText] = useState("");
+  const [brdError, setBrdError] = useState("");
+  const [brdScope, setBrdScope] = useState("engagement"); // "engagement" | "module:<name>" | "session:<id>"
+
+  const modules = useModules(engagementId);
   const navigate = useNavigate();
 
   // Reset the active conversation when the engagement changes
@@ -90,6 +102,130 @@ function AskMunin({ engagementId }) {
       setMessages((m) => [...m, { role: "assistant", text: "Sorry — I couldn't reach the backend to answer that. Is it running?", citation: null, isGap: false }]);
     }
   };
+  const handleGenerateBrd = async () => {
+    setBrdOpen(true);
+    setBrdLoading(true);
+    setBrdError("");
+    setBrdText("");
+
+    const options = {};
+    if (brdScope.startsWith("module:")) {
+      options.module = brdScope.slice("module:".length);
+    } else if (brdScope.startsWith("session:")) {
+      options.sessionId = brdScope.slice("session:".length);
+    }
+
+    try {
+      const res = await chatApi.generateBrd(engagementId, options);
+      setBrdText(res.brd);
+    } catch (err) {
+      console.error(err);
+      setBrdError("Failed to generate BRD. Please try again.");
+    } finally {
+      setBrdLoading(false);
+    }
+  };
+
+  const handleDownloadBrd = () => {
+    const blob = new Blob([brdText], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "BRD.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // Splits the plain BRD text into { heading, lines[] } sections, using our
+  // known numbered headings (e.g. "1. OVERVIEW") as section boundaries.
+  function parseBrdSections(text) {
+    const headingPattern = /^\d+\.\s+[A-Z][A-Z\s/&-]+$/;
+    const lines = text.split("\n");
+    const sections = [];
+    let current = null;
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      if (!line) continue;
+
+      if (headingPattern.test(line)) {
+        current = { heading: line, lines: [] };
+        sections.push(current);
+      } else if (current) {
+        current.lines.push(line);
+      } else {
+        current = { heading: "", lines: [line] };
+        sections.push(current);
+      }
+    }
+    return sections;
+  }
+
+  const handleDownloadWord = async () => {
+    const sections = parseBrdSections(brdText);
+    const children = [
+      new Paragraph({ text: "Business Requirement Document", heading: HeadingLevel.TITLE }),
+    ];
+
+    for (const section of sections) {
+      if (section.heading) {
+        children.push(new Paragraph({ text: section.heading, heading: HeadingLevel.HEADING_1 }));
+      }
+      for (const line of section.lines) {
+        children.push(new Paragraph({ text: line }));
+      }
+    }
+
+    const doc = new Document({ sections: [{ children }] });
+    const blob = await Packer.toBlob(doc);
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "BRD.docx";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDownloadPdf = () => {
+    const sections = parseBrdSections(brdText);
+    const doc = new jsPDF({ unit: "pt", format: "a4" });
+    const margin = 48;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const maxWidth = pageWidth - margin * 2;
+    let y = margin;
+
+    const addLine = (text, size, style) => {
+      doc.setFontSize(size);
+      doc.setFont("helvetica", style);
+      const wrapped = doc.splitTextToSize(text, maxWidth);
+      for (const line of wrapped) {
+        if (y > pageHeight - margin) {
+          doc.addPage();
+          y = margin;
+        }
+        doc.text(line, margin, y);
+        y += size * 1.4;
+      }
+    };
+
+    addLine("Business Requirement Document", 18, "bold");
+    y += 10;
+
+    for (const section of sections) {
+      if (section.heading) {
+        y += 8;
+        addLine(section.heading, 13, "bold");
+      }
+      for (const line of section.lines) {
+        addLine(line, 10, "normal");
+      }
+    }
+
+    doc.save("BRD.pdf");
+  };
+
 
   return (
     <div style={{ padding: "26px 32px 32px", display: "flex", height: "calc(100vh - 130px)" }}>
@@ -108,7 +244,27 @@ function AskMunin({ engagementId }) {
       />
       <div style={{ flex: 1, marginLeft: 20, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <Section title="Ask Munin" style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 12.5, color: C.textFaint }}>Answers are grounded in the knowledge base and always cite a source. Anything uncovered is logged as a gap automatically.</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <div style={{ fontSize: 12.5, color: C.textFaint }}>Answers are grounded in the knowledge base and always cite a source.</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select
+                value={brdScope}
+                onChange={(e) => setBrdScope(e.target.value)}
+                style={{
+                  background: C.bgRaised, color: C.text, border: `1px solid ${C.border}`,
+                  borderRadius: 6, padding: "5px 8px", fontSize: 12.5, fontFamily: FF.sans,
+                }}
+              >
+                <option value="engagement">All Modules</option>
+                {modules.map((m) => (
+                  <option key={m.name} value={`module:${m.name}`}>Module: {m.name}</option>
+                ))}
+              </select>
+              <button onClick={handleGenerateBrd} style={{ ...btnPrimary, whiteSpace: "nowrap", padding: "6px 12px", fontSize: 12.5 }}>
+                Generate BRD
+              </button>
+            </div>
+          </div>
         </Section>
 
         <Card style={{ flex: 1, padding: "18px 20px", display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -157,6 +313,43 @@ function AskMunin({ engagementId }) {
           </div>
         </Card>
       </div>
+
+      {brdOpen && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000,
+        }}>
+          <div style={{
+            background: C.bgRaised, border: `1px solid ${C.border}`, borderRadius: 10,
+            width: "70%", maxWidth: 800, maxHeight: "80vh", display: "flex", flexDirection: "column", padding: 20,
+          }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: C.text }}>Business Requirement Document</div>
+              <button onClick={() => setBrdOpen(false)} style={{ ...btnGhost, padding: "4px 10px" }}>Close</button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: "auto", fontSize: 13, lineHeight: 1.6, color: C.textMuted, whiteSpace: "pre-wrap" }}>
+              {brdLoading && "Generating BRD… this may take a moment."}
+              {brdError && <div style={{ color: C.amber }}>{brdError}</div>}
+              {!brdLoading && !brdError && brdText}
+            </div>
+
+            {!brdLoading && !brdError && brdText && (
+              <div style={{ marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 14, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+                <button onClick={handleDownloadBrd} style={btnGhost}>
+                  .txt
+                </button>
+                <button onClick={handleDownloadWord} style={btnGhost}>
+                  .docx
+                </button>
+                <button onClick={handleDownloadPdf} style={btnGhost}>
+                  .pdf
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

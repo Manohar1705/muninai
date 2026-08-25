@@ -37,6 +37,10 @@ const systemPromptTemplate = fs.readFileSync(
   path.join(__dirname, "../../prompts/systemPrompt.txt"),
   "utf8"
 );
+const brdPromptTemplate = fs.readFileSync(
+  path.join(__dirname, "../../prompts/brdPrompt.txt"),
+  "utf8"
+);
 async function buildExtractionPrompt(text, sourceLabel, engagementId) {
   const knownModules = await listModules(engagementId);
   return extractionPromptTemplate
@@ -298,6 +302,54 @@ async function askLlm(question, knowledgeObjects, history = [], dbContext = {}, 
   });
 }
 
+function buildBrdPrompt(knowledgeObjects, engagement, scopeLabel) {
+  const objectsText = knowledgeObjects
+    .map((k, i) => `[${i + 1}] module=${k.module} type=${k.type} title="${k.title}"
+description: ${k.description}
+source: ${k.sessionTitle || k.source}`)
+    .join("\n\n");
+
+  return brdPromptTemplate
+    .replace("{{KNOWLEDGE_OBJECTS}}", objectsText || "(no knowledge objects found)")
+    .replace("{{ENGAGEMENT_NAME}}", engagement?.name || "Unknown Engagement")
+    .replace("{{SCOPE_LABEL}}", scopeLabel || "Whole engagement");
+}
+
+async function generateBrd(knowledgeObjects, engagement, scopeLabel) {
+  if (!isGroqConfigured()) {
+    throw new Error("GROQ_API_KEY is not set — cannot generate BRD.");
+  }
+
+  const prompt = buildBrdPrompt(knowledgeObjects, engagement, scopeLabel);
+  const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
+
+  return traceLlmCall({ name: "generate-brd", input: prompt, metadata: { model, objectCount: knowledgeObjects.length, scopeLabel } }, async (reportUsage) => {
+    const response = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4000,
+        temperature: 0.2,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => "");
+      throw new Error(`Groq API error ${response.status}: ${errText}`);
+    }
+
+    const data = await response.json();
+    reportUsage(data.usage);
+    return (data.choices?.[0]?.message?.content || "").trim();
+  });
+}
+
+
 /**
  * Speech-to-text for uploaded recordings (routes/media.js) — a separate
  * concern from meeting transcription. Meetings get their transcript for
@@ -342,4 +394,4 @@ async function transcribeAudio(buffer, filename, engagementId = null) {
   });
 }
 
-module.exports = { isLlmConfigured, askLlm, shortlistCandidates, isGroqConfigured, extractKnowledgeFromText, transcribeAudio };
+module.exports = { isLlmConfigured, askLlm, shortlistCandidates, isGroqConfigured, extractKnowledgeFromText, transcribeAudio, generateBrd };
