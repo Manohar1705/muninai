@@ -62,7 +62,21 @@ export default function App() {
   // dashboard/SME-map pipeline are all scoped to this one engagement.
   // Persisted so a refresh doesn't drop the user back to the Starter page.
   const { currentEngagementId, setCurrentEngagementId } = useCurrentEngagement();
-  const { engagements } = useEngagement(currentEngagementId, isAuthenticated && !mustResetPassword);
+  const { engagements, isLoading: engagementsLoading } = useEngagement(currentEngagementId, isAuthenticated && !mustResetPassword);
+
+  // Guard against a stale engagement ID left over in localStorage from a
+  // different team/account (Issue A). Once this session's engagement list
+  // has actually loaded, drop any ID that isn't in it — falls back to the
+  // Starter/picker screen instead of rendering a broken "undefined
+  // engagement, empty modules" dashboard.
+  useEffect(() => {
+    if (!currentEngagementId) return;
+    if (engagementsLoading) return;
+    const stillValid = engagements.some((e) => e.id === currentEngagementId);
+    if (!stillValid) {
+      setCurrentEngagementId(null);
+    }
+  }, [currentEngagementId, engagements, engagementsLoading, setCurrentEngagementId]);
   const { configStatus, showBanner, dismissBanner } = useConfigBanner();
 
   if (authLoading) {
@@ -105,6 +119,18 @@ export default function App() {
         />
       </div>
       </ToastProvider>
+    );
+  }
+
+  // We have an engagement ID, but haven't confirmed yet (this render pass)
+  // whether it's actually valid for this session — avoid flashing the
+  // broken dashboard while that check is in flight.
+  if (engagementsLoading) {
+    return (
+      <div style={{ fontFamily: FF.sans, background: C.bg, color: C.textFaint, minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>
+        <style>{FONT_IMPORT}</style>
+        Loading…
+      </div>
     );
   }
 

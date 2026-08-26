@@ -1,0 +1,28 @@
+Your task: organize this knowledge into a structured BRD with these sections:
+
+1. Overview — a short paragraph describing what this document covers (engagement name, modules/sessions included).
+2. Business Objectives — the underlying business goals/drivers behind this project, ONLY if explicitly discussed in the knowledge objects (e.g. reasons for migrating, replacing, or building something). Do NOT infer generic objectives that aren't stated.
+3. Scope — a concise list of what modules/systems/processes are covered by this document, based strictly on the modules and knowledge objects present. Do not list anything as "out of scope" — only state what IS covered.
+4. Functional Requirements — what the system/process must DO (specific actions, features, behaviors). Write each as a numbered requirement (FR1, FR2, ...). Cite the source session for each.
+5. Non-Functional Requirements — HOW WELL the system must perform (speed, security, accuracy, availability, scalability, etc). Write each as a numbered requirement (NFR1, NFR2, ...). Cite the source session for each.
+6. Stakeholders — list people/roles who have a real stake in this engagement, based on the knowledge objects. This includes anyone described as owning or being responsible for a module or decision, anyone whose approval or sign-off is required, and anyone who expresses a genuine concern, risk, or personal/team impact tied to a specific outcome. Merely attending a meeting, explaining a topic, or discussing/answering questions about it does NOT make someone a stakeholder on its own — only include someone if they have actual responsibility, required approval, or a stated personal/business impact. Only include people explicitly named or clearly identifiable in the knowledge objects — do not invent names or roles.
+
+Rules:
+- Only use information present in the knowledge objects below. Do NOT invent requirements, objectives, or scope items that aren't supported by the provided knowledge.
+- Classify each knowledge object as Functional or Non-Functional based on whether it describes an action/feature (Functional) or a quality/performance attribute (Non-Functional).
+- If a knowledge object doesn't clearly fit Functional or Non-Functional, use your best judgment and place it in the more appropriate section.
+- Group requirements by module when multiple modules are present.
+- Always cite the session title for each requirement, exactly as given in the "source" field.
+- Always include the "2. BUSINESS OBJECTIVES" heading. If no business objectives are identified in the knowledge objects, write exactly this line under that heading: "No business objectives were identified in the provided knowledge objects." Do not guess or invent objectives.
+- Always include the "4. FUNCTIONAL REQUIREMENTS" heading. If no functional requirements are identified in the knowledge objects, write exactly this line under that heading: "No functional requirements were identified in the provided knowledge objects."
+- Always include the "5. NON-FUNCTIONAL REQUIREMENTS" heading. If no non-functional requirements are identified in the knowledge objects, write exactly this line under that heading: "No non-functional requirements were identified in the provided knowledge objects."
+- Always include the "6. STAKEHOLDERS" heading. If no stakeholder/ownership information is available in the knowledge objects, write exactly this line under that heading: "No stakeholder information was identified in the provided knowledge objects." Do not guess or invent names.
+
+Knowledge objects:
+
+{{KNOWLEDGE_OBJECTS}}
+
+Engagement: {{ENGAGEMENT_NAME}}
+Scope: {{SCOPE_LABEL}}
+
+Respond with ONLY the BRD document as plain text (no JSON, no markdown fences) — structured with clear section headings exactly as: "1. OVERVIEW", "2. BUSINESS OBJECTIVES", "3. SCOPE", "4. FUNCTIONAL REQUIREMENTS", "5. NON-FUNCTIONAL REQUIREMENTS", "6. STAKEHOLDERS".

@@ -28,7 +28,12 @@ function RegisterPage() {
     setSubmitting(true);
     try {
       await register(teamName.trim(), email.trim(), password);
-      navigate("/", { replace: true });
+      // Team created, but not logged in — send them to the real login
+      // step with the email prefilled and a confirmation message.
+      navigate("/login", {
+        replace: true,
+        state: { prefillEmail: email.trim(), justRegistered: true },
+      });
     } catch (err) {
       setError(err.message?.includes("409") ? "An account with this email already exists." : (err.message || "Registration failed."));
       setSubmitting(false);

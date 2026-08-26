@@ -9,11 +9,11 @@ const API_BASE = import.meta.env?.VITE_API_BASE || "http://localhost:4000/api";
 const TOKEN_STORAGE_KEY = "munin.token";
 
 function getToken() {
-  return localStorage.getItem(TOKEN_STORAGE_KEY);
+  return sessionStorage.getItem(TOKEN_STORAGE_KEY);
 }
 function setToken(token) {
-  if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
-  else localStorage.removeItem(TOKEN_STORAGE_KEY);
+  if (token) sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+  else sessionStorage.removeItem(TOKEN_STORAGE_KEY);
 }
 function authHeader() {
   const token = getToken();

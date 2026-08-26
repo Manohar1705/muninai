@@ -22,6 +22,11 @@ import { useModules } from "../../shared/hooks/useModules";
 import { Document, Packer, Paragraph, HeadingLevel } from "docx";
 import jsPDF from "jspdf";
 /* ============================== ASK MUNIN (CHAT) ============================== */
+// Strips ** markdown markers from text so they never show up literally.
+function stripMarkdownBold(text) {
+  if (!text) return text;
+  return text.replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*\*/g, "");
+}
 
 function AskMunin({ engagementId }) {
   const queryClient = useQueryClient();
@@ -126,8 +131,9 @@ function AskMunin({ engagementId }) {
     }
   };
 
-  const handleDownloadBrd = () => {
-    const blob = new Blob([brdText], { type: "text/plain" });
+const handleDownloadBrd = () => {
+    const content = "BUSINESS REQUIREMENT DOCUMENT\n\n" + brdText;
+    const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -139,7 +145,7 @@ function AskMunin({ engagementId }) {
   // Splits the plain BRD text into { heading, lines[] } sections, using our
   // known numbered headings (e.g. "1. OVERVIEW") as section boundaries.
   function parseBrdSections(text) {
-    const headingPattern = /^\d+\.\s+[A-Z][A-Z\s/&-]+$/;
+    const headingPattern = /^\d+\.\s*[A-Za-z][A-Za-z\s/&\-–—]*:?$/;
     const lines = text.split("\n");
     const sections = [];
     let current = null;
@@ -164,7 +170,7 @@ function AskMunin({ engagementId }) {
   const handleDownloadWord = async () => {
     const sections = parseBrdSections(brdText);
     const children = [
-      new Paragraph({ text: "Business Requirement Document", heading: HeadingLevel.TITLE }),
+      new Paragraph({ text: "BUSINESS REQUIREMENT DOCUMENT", heading: HeadingLevel.TITLE }),
     ];
 
     for (const section of sections) {
@@ -172,7 +178,7 @@ function AskMunin({ engagementId }) {
         children.push(new Paragraph({ text: section.heading, heading: HeadingLevel.HEADING_1 }));
       }
       for (const line of section.lines) {
-        children.push(new Paragraph({ text: line }));
+        children.push(new Paragraph({ text: stripMarkdownBold(line) }));
       }
     }
 
@@ -210,7 +216,7 @@ function AskMunin({ engagementId }) {
       }
     };
 
-    addLine("Business Requirement Document", 18, "bold");
+    addLine("BUSINESS REQUIREMENT DOCUMENT", 18, "bold");
     y += 10;
 
     for (const section of sections) {
@@ -219,7 +225,7 @@ function AskMunin({ engagementId }) {
         addLine(section.heading, 13, "bold");
       }
       for (const line of section.lines) {
-        addLine(line, 10, "normal");
+        addLine(stripMarkdownBold(line), 10, "normal");
       }
     }
 
@@ -284,7 +290,7 @@ function AskMunin({ engagementId }) {
                   color: m.role === "user" ? C.text : C.textMuted,
                   border: `1px solid ${m.role === "user" ? "rgba(217,164,65,0.3)" : C.border}`,
                 }}>
-                  {m.text}
+                  {stripMarkdownBold(m.text)}
                 </div>
                 {m.role === "assistant" && m.citation && (
                   <button onClick={() => goToCitation(m.citation)} style={{ ...btnGhost, marginTop: 6, padding: "5px 10px", fontSize: 11.5 }}>
@@ -334,7 +340,7 @@ function AskMunin({ engagementId }) {
               {!brdLoading && !brdError && brdText}
             </div>
 
-            {!brdLoading && !brdError && brdText && (
+            {!brdLoading && !brdError && stripMarkdownBold(brdText) && (
               <div style={{ marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 14, display: "flex", justifyContent: "flex-end", gap: 8 }}>
                 <button onClick={handleDownloadBrd} style={btnGhost}>
                   .txt

@@ -15,7 +15,8 @@ Respond with ONLY a raw JSON object (no markdown fences, no preamble) in exactly
 Rules:
 - "title": short (max 8 words), specific.
 - "description": 1-3 sentences, grounded ONLY in the text above. Never invent details not present in the source.
-- "type": one of "Procedure", "Architecture", "Gotcha", "Configuration", "Ownership", "Other".
+- "type": one of "Procedure", "Architecture", "Gotcha", "Configuration", "Ownership", "Business Objective", "Other".
+- Use "Business Objective" for statements about WHY something is being done — business goals, drivers, or motivations (e.g. cost savings, compliance, replacing a vendor, improving speed). Do not use this type for technical how/what details.
 - "module": Choose a short, specific topic name (1-4 words) that reflects the actual subject being discussed.
 
 Known existing modules for this engagement (from sessions and manually planned modules):

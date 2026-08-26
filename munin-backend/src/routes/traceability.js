@@ -40,6 +40,9 @@ router.get("/traces", async (req, res) => {
 
   const auth = Buffer.from(`${publicKey}:${secretKey}`).toString("base64");
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
   try {
     // Run both Langfuse calls in parallel instead of one after another —
     // they're independent, so there's no need to wait for observations
@@ -78,6 +81,12 @@ router.get("/traces", async (req, res) => {
     }));
     res.json({ data: mapped });
   } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === "AbortError") {
+      return res.status(504).json({
+        error: "Insights are taking longer than usual to load. Please try again in a moment.",
+      });
+    }
     res.status(500).json({ error: err.message });
   }
 });

@@ -54,10 +54,12 @@ export function AuthProvider({ children }) {
   }, [applySession]);
 
   const register = useCallback(async (teamName, email, password) => {
+    // Intentionally does NOT call applySession() here. Team creation should
+    // not auto-authenticate the browser — the user must log in explicitly
+    // as a separate step afterward (see RegisterPage).
     const session = await authApi.register(teamName, email, password);
-    applySession(session);
     return session;
-  }, [applySession]);
+  }, []);
 
   const resetPassword = useCallback(async (currentPassword, newPassword) => {
     await authApi.resetPassword(currentPassword, newPassword);

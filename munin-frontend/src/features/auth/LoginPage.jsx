@@ -10,7 +10,7 @@ function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(location.state?.prefillEmail || "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -44,7 +44,11 @@ function LoginPage() {
             <div style={{ fontSize: 20, fontWeight: 500 }}>Munin</div>
           </div>
           <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 4 }}>Log in</div>
-          <div style={{ fontSize: 12.5, color: C.textFaint, marginBottom: 24 }}>Access your team's engagements.</div>
+          <div style={{ fontSize: 12.5, color: C.textFaint, marginBottom: 24 }}>
+            {location.state?.justRegistered
+              ? "Team created — log in to continue."
+              : "Access your team's engagements."}
+          </div>
           <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div>
               <div style={{ fontSize: 11.5, color: C.textFaint, marginBottom: 6 }}>Email</div>

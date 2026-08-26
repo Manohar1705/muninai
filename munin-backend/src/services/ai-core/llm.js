@@ -323,7 +323,7 @@ async function generateBrd(knowledgeObjects, engagement, scopeLabel) {
   const prompt = buildBrdPrompt(knowledgeObjects, engagement, scopeLabel);
   const model = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 
-  return traceLlmCall({ name: "generate-brd", input: prompt, metadata: { model, objectCount: knowledgeObjects.length, scopeLabel } }, async (reportUsage) => {
+    return traceLlmCall({ name: "generate-brd", input: prompt, metadata: { model, objectCount: knowledgeObjects.length, scopeLabel, engagementId: engagement?.id } }, async (reportUsage) => {
     const response = await fetch(GROQ_API_URL, {
       method: "POST",
       headers: {
@@ -345,7 +345,8 @@ async function generateBrd(knowledgeObjects, engagement, scopeLabel) {
 
     const data = await response.json();
     reportUsage(data.usage);
-    return (data.choices?.[0]?.message?.content || "").trim();
+    const raw = data.choices?.[0]?.message?.content || "";
+    return raw.replace(/[ \t]{2,}/g, " ").trim();
   });
 }
 
