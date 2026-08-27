@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { C, FF, FONT_IMPORT, IconRaven, Card, Input, btnPrimary, btnGhost } from "../../shared/components/common";
+import { C, FF, FONT_IMPORT, IconRaven, Card, Input,PasswordInput, btnPrimary, btnGhost } from "../../shared/components/common";
 import { useAuth } from "../../shared/auth/AuthContext";
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -65,15 +65,15 @@ function ResetPasswordPage() {
               <div style={{ fontSize: 11.5, color: C.textFaint, marginBottom: 6 }}>
                 {mustResetPassword ? "Temporary password" : "Current password"}
               </div>
-              <Input type="password" autoFocus required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} style={{ width: "100%" }} />
+                <PasswordInput autoFocus required value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} style={{ width: "100%" }} />
             </div>
             <div>
               <div style={{ fontSize: 11.5, color: C.textFaint, marginBottom: 6 }}>New password</div>
-              <Input type="password" required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={{ width: "100%" }} />
+              <PasswordInput required value={newPassword} onChange={(e) => setNewPassword(e.target.value)} style={{ width: "100%" }} />
             </div>
             <div>
               <div style={{ fontSize: 11.5, color: C.textFaint, marginBottom: 6 }}>Confirm new password</div>
-              <Input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ width: "100%" }} />
+              <PasswordInput required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ width: "100%" }} />
             </div>
             {error && <div style={{ fontSize: 12, color: C.red }}>{error}</div>}
             <button type="submit" disabled={submitting} style={{ ...btnPrimary, justifyContent: "center", marginTop: 6, opacity: submitting ? 0.7 : 1 }}>

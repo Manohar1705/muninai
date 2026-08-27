@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 /* ============================== DESIGN TOKENS ============================== */
 const C = {
@@ -20,7 +20,7 @@ const C = {
   borderTable: "#444",
   borderTableSoft: "#333",
   redSoft: "rgba(196,104,90,0.14)",
-  green: "#7FA37A",
+  green: "#7FA37A", 
 };
 
 const FONT_IMPORT = `@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');`;
@@ -59,7 +59,9 @@ const icons = {
   video: <><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3.5v11L16 14"/></>,
   logOut: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></>,
   book: <><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V2H6.5A2.5 2.5 0 0 0 4 4.5v15z"/></>,
-  send: <path d="M22 2 11 13"/>,
+    send: <><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></>,
+  eye: <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></>,
+  eyeOff: <><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a20.3 20.3 0 0 1 4.22-5.94M9.9 4.24A10.94 10.94 0 0 1 12 4c7 0 11 8 11 8a20.3 20.3 0 0 1-3.16 4.38"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><path d="M1 1l22 22"/></>,
   dots: <><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/><circle cx="5" cy="12" r="1.5"/></>,
   edit: <><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></>,
   pin: <><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></>,
@@ -128,6 +130,25 @@ function Input({ style, ...rest }) {
       }}
       {...rest}
     />
+  );
+}
+function PasswordInput({ style, ...rest }) {
+  const [visible, setVisible] = useState(false);
+  return (
+    <div style={{ position: "relative", width: style?.width || "auto" }}>
+      <Input type={visible ? "text" : "password"} style={{ ...style, paddingRight: 38, width: "100%" }} {...rest} />
+      <button
+        type="button"
+        onClick={() => setVisible((v) => !v)}
+        style={{
+          position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)",
+          background: "none", border: "none", cursor: "pointer", padding: 4,
+          display: "flex", color: C.textFaint,
+        }}
+      >
+        <Icon d={visible ? icons.eyeOff : icons.eye} size={16} />
+      </button>
+    </div>
   );
 }
 // Ambient amber glow used behind full-bleed entry screens (Starter, Login,
@@ -213,6 +234,7 @@ export {
   FF,
   FONT_IMPORT,
   Icon,
+  PasswordInput,
   IconRaven,
   icons,
   Card,

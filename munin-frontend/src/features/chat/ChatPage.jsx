@@ -25,7 +25,10 @@ import jsPDF from "jspdf";
 // Strips ** markdown markers from text so they never show up literally.
 function stripMarkdownBold(text) {
   if (!text) return text;
-  return text.replace(/\*\*(.*?)\*\*/g, "$1").replace(/\*\*/g, "");
+  return text
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/\*\*/g, "")
+    .replace(/^\* /gm, "• ");
 }
 
 function AskMunin({ engagementId }) {
@@ -38,7 +41,7 @@ function AskMunin({ engagementId }) {
   const [brdLoading, setBrdLoading] = useState(false);
   const [brdText, setBrdText] = useState("");
   const [brdError, setBrdError] = useState("");
-  const [brdScope, setBrdScope] = useState("engagement"); // "engagement" | "module:<name>" | "session:<id>"
+  const [brdScope, setBrdScope] = useState(""); // "module:<name>" | "session:<id>"
 
   const modules = useModules(engagementId);
   const navigate = useNavigate();
@@ -249,28 +252,8 @@ const handleDownloadBrd = () => {
         loading={loadingConversations}
       />
       <div style={{ flex: 1, marginLeft: 20, display: "flex", flexDirection: "column", minWidth: 0 }}>
-        <Section title="Ask Munin" style={{ marginBottom: 12 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-            <div style={{ fontSize: 12.5, color: C.textFaint }}>Answers are grounded in the knowledge base and always cite a source.</div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <select
-                value={brdScope}
-                onChange={(e) => setBrdScope(e.target.value)}
-                style={{
-                  background: C.bgRaised, color: C.text, border: `1px solid ${C.border}`,
-                  borderRadius: 6, padding: "5px 8px", fontSize: 12.5, fontFamily: FF.sans,
-                }}
-              >
-                <option value="engagement">All Modules</option>
-                {modules.map((m) => (
-                  <option key={m.name} value={`module:${m.name}`}>Module: {m.name}</option>
-                ))}
-              </select>
-              <button onClick={handleGenerateBrd} style={{ ...btnPrimary, whiteSpace: "nowrap", padding: "6px 12px", fontSize: 12.5 }}>
-                Generate BRD
-              </button>
-            </div>
-          </div>
+                <Section title="Ask Munin" style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 12.5, color: C.textFaint }}>Answers are grounded in the knowledge base and always cite a source.</div>
         </Section>
 
         <Card style={{ flex: 1, padding: "18px 20px", display: "flex", flexDirection: "column", minHeight: 0 }}>
@@ -279,9 +262,6 @@ const handleDownloadBrd = () => {
             style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 16 }}
           >
             {loadingHistory && <div style={{ fontSize: 12.5, color: C.textFaint }}>Loading conversation…</div>}
-            {!loadingHistory && messages.length === 0 && (
-              <div style={{ fontSize: 12.5, color: C.textFaint }}>Ask a question about the knowledge transfer — e.g. "How does the batch settlement retry work?"</div>
-            )}
             {messages.map((m, i) => (
               <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
                 <div style={{
@@ -313,8 +293,37 @@ const handleDownloadBrd = () => {
               disabled={sending}
               style={{ flex: 1, borderRadius: 7, padding: "10px 12px", fontSize: 13.5 }}
             />
-            <button onClick={send} disabled={sending || !input.trim()} style={{ ...btnPrimary, opacity: sending || !input.trim() ? 0.6 : 1 }}>
-              <Icon d={icons.send} size={14} /> {sending ? "…" : "Send"}
+            <button
+              onClick={send}
+              disabled={sending || !input.trim()}
+              style={{
+                display: "flex", alignItems: "center", justifyContent: "center",
+                width: 38, height: 38, borderRadius: "50%", border: "none", cursor: "pointer",
+                background: input.trim() ? C.amber : C.bgRaised,
+                color: input.trim() ? C.textOnAmber : C.textFaint,
+                transition: "background 0.15s ease, color 0.15s ease",
+              }}
+            >
+              <Icon d={icons.send} size={16} />
+            </button>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center", marginTop: 10 }}>
+            <select
+              value={brdScope}
+              onChange={(e) => setBrdScope(e.target.value)}
+              style={{
+                background: C.bgRaised, color: C.text, border: `1px solid ${C.border}`,
+                borderRadius: 6, padding: "5px 8px", fontSize: 12.5, fontFamily: FF.sans,
+              }}
+            >
+            <option value="">Select a module</option>
+              {modules.map((m) => (
+                <option key={m.name} value={`module:${m.name}`}>Module: {m.name}</option>
+              ))}
+            </select>
+            <button onClick={handleGenerateBrd} style={{ ...btnPrimary, whiteSpace: "nowrap", padding: "6px 12px", fontSize: 12.5 }}>
+              Generate BRD
             </button>
           </div>
         </Card>
@@ -337,10 +346,10 @@ const handleDownloadBrd = () => {
             <div style={{ flex: 1, overflowY: "auto", fontSize: 13, lineHeight: 1.6, color: C.textMuted, whiteSpace: "pre-wrap" }}>
               {brdLoading && "Generating BRD… this may take a moment."}
               {brdError && <div style={{ color: C.amber }}>{brdError}</div>}
-              {!brdLoading && !brdError && brdText}
+                {!brdLoading && !brdError && stripMarkdownBold(brdText)}
             </div>
 
-            {!brdLoading && !brdError && stripMarkdownBold(brdText) && (
+             {!brdLoading && !brdError && brdText && (
               <div style={{ marginTop: 14, borderTop: `1px solid ${C.border}`, paddingTop: 14, display: "flex", justifyContent: "flex-end", gap: 8 }}>
                 <button onClick={handleDownloadBrd} style={btnGhost}>
                   .txt

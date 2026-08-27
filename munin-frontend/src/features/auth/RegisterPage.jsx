@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { C, FF, FONT_IMPORT, IconRaven, Card, Input, btnPrimary, HeroGlow } from "../../shared/components/common";
+import { C, FF, FONT_IMPORT, IconRaven, Card, Input, PasswordInput, btnPrimary, HeroGlow } from "../../shared/components/common";
 import { useAuth } from "../../shared/auth/AuthContext";
 
 const EASE = [0.4, 0, 0.2, 1];
@@ -70,11 +70,11 @@ function RegisterPage() {
             </div>
             <div>
               <div style={{ fontSize: 11.5, color: C.textFaint, marginBottom: 6 }}>Password</div>
-              <Input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: "100%" }} />
+                <PasswordInput required value={password} onChange={(e) => setPassword(e.target.value)} style={{ width: "100%" }} />
             </div>
             <div>
               <div style={{ fontSize: 11.5, color: C.textFaint, marginBottom: 6 }}>Confirm password</div>
-              <Input type="password" required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ width: "100%" }} />
+              <PasswordInput required value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} style={{ width: "100%" }} />
             </div>
             {error && <div style={{ fontSize: 12, color: C.red }}>{error}</div>}
             <button type="submit" disabled={submitting} style={{ ...btnPrimary, justifyContent: "center", marginTop: 6, opacity: submitting ? 0.7 : 1 }}>

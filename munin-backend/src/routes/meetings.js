@@ -220,6 +220,7 @@ router.get("/:id/status", async (req, res) => {
         // The bot status itself is still valid and already saved above —
         // only the knowledge extraction failed. Surface that separately
         // instead of masking a successful status refresh as a 502.
+        console.error("processMeetingChunks failed:", err);
         const recordingStart = bot.status_changes?.find(
           (s) => s.code === "in_call_recording"
         );
@@ -277,7 +278,10 @@ router.get("/:id/status", async (req, res) => {
 // Always responds 200, even on a parsing hiccup — this is a webhook Recall
 // will retry on failure, and a malformed/unexpected event shape here isn't
 // worth spamming their retry logs over.
-router.post("/webhook", async (req, res) => {
+// Exported separately (see server.js) so it can be mounted WITHOUT
+// requireAuth() — Recall.ai calls this directly and can never send our
+// login token.
+async function webhookHandler(req, res) {
 
   console.log(
     "WEBHOOK RECEIVED:",
@@ -338,7 +342,8 @@ router.post("/webhook", async (req, res) => {
     console.error("meetings webhook error:", err);
     return res.status(200).json({ received: true, error: err.message });
   }
-});
+}
+router.post("/webhook", webhookHandler);
 
 // POST /api/meetings/:id/leave
 router.post("/:id/leave", async (req, res) => {
@@ -488,3 +493,4 @@ router.delete("/:id", async (req, res) => {
 
 
 module.exports = router;
+module.exports.webhookHandler = webhookHandler;

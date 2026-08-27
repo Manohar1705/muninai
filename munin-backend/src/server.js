@@ -66,6 +66,11 @@ app.use("/api/chat", requireAuth(), requireEngagementIdInTeam, chatRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/settings", settingsRoutes);
 app.use("/api/documents", requireAuth(), requireEngagementIdInTeam, documentsRoutes);
+// Recall.ai calls this URL directly (it's not a logged-in user, so it
+// can never send our auth token) — it must be reachable without login,
+// which is why it's registered here, before requireAuth() below applies
+// to the rest of /api/meetings.
+app.post("/api/meetings/webhook", meetingsRoutes.webhookHandler);
 app.use("/api/meetings", requireAuth(), requireEngagementIdInTeam, meetingsRoutes);
 app.use("/api/media", requireAuth(), requireEngagementIdInTeam, mediaRoutes);
 app.use("/api/engagements/:id/team", teamRoutes);
