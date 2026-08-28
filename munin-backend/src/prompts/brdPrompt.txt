@@ -1,22 +1,60 @@
 Your task: organize this knowledge into a structured BRD with these sections:
 
 1. Overview — a short paragraph describing what this document covers (engagement name, modules/sessions included).
-2. Business Objectives — the underlying business goals/drivers behind this project, ONLY if explicitly discussed in the knowledge objects (e.g. reasons for migrating, replacing, or building something). Do NOT infer generic objectives that aren't stated.
-3. Scope — a concise list of what modules/systems/processes are covered by this document, based strictly on the modules and knowledge objects present. Do not list anything as "out of scope" — only state what IS covered. Each bullet must be a full, descriptive phrase or sentence (at least 4-5 words) that clearly explains what that scope item covers — never a single word or a bare topic name on its own.
-4. Functional Requirements — what the system/process must DO (specific actions, features, behaviors). Write each as a numbered requirement (FR1, FR2, ...). Cite the source session for each.
-5. Non-Functional Requirements — HOW WELL the system must perform (speed, security, accuracy, availability, scalability, etc). Write each as a numbered requirement (NFR1, NFR2, ...). Cite the source session for each.
-6. Stakeholders — list people/roles who have a real stake in this engagement, based on the knowledge objects. This includes anyone described as owning or being responsible for a module or decision, anyone whose approval or sign-off is required, and anyone who expresses a genuine concern, risk, or personal/team impact tied to a specific outcome. Merely attending a meeting, explaining a topic, or discussing/answering questions about it does NOT make someone a stakeholder on its own — only include someone if they have actual responsibility, required approval, or a stated personal/business impact. Only include people explicitly named or clearly identifiable in the knowledge objects — do not invent names or roles.
+
+2. Business Objectives — identify the key business goals and desired outcomes supported by the knowledge objects, engagement context, and scope.
 
 Rules:
-- Only use information present in the knowledge objects below. Do NOT invent requirements, objectives, or scope items that aren't supported by the provided knowledge.
+- Generate between 3 and 5 business objectives whenever sufficient information is available.
+- Present objectives as bullet points.
+- Focus on WHY the capability exists, not HOW it is implemented.
+- Do not create one objective per knowledge object.
+- Consolidate related knowledge into broader business goals.
+- Keep each objective to a single concise line.
+- Target 6 to 12 words per objective.
+- Focus on business outcomes rather than technical implementation details.
+- Business objectives may be reasonably derived from the knowledge objects, engagement name, and scope when clearly supported by the information provided.
+- Avoid generic objectives that are not supported by the available information.
+- Never generate more than 5 objectives regardless of knowledge object count.
+
+3. Scope — a concise list of what modules/systems/processes are covered by this document, based strictly on the modules and knowledge objects present. Do not list anything as "out of scope" — only state what IS covered. Each bullet must be a full, descriptive phrase or sentence (at least 4-5 words) that clearly explains what that scope item covers — never a single word or a bare topic name on its own.
+
+4. Functional Requirements — what the system/process must DO (specific actions, features, behaviors). Write each as a numbered requirement (FR1, FR2, ...). Cite the source session for each.
+
+5. Non-Functional Requirements — HOW WELL the system must perform (speed, security, accuracy, availability, scalability, etc). Write each as a numbered requirement (NFR1, NFR2, ...). Cite the source session for each.
+
+6. Stakeholders — list only people or roles that have a genuine stake in the engagement.
+
+Rules:
+- Include only individuals or roles explicitly identified as owners, approvers, decision-makers, accountable parties, or those directly responsible for a module, process, system, or business outcome.
+- Include individuals whose approval, sign-off, accountability, or ownership responsibility is explicitly stated.
+- Do not include meeting attendees, presenters, speakers, participants, trainers, or subject matter experts unless ownership or accountability is explicitly stated.
+- Do not assume a person is a stakeholder solely because they explained a topic or appeared in a meeting.
+- Only include people explicitly named or clearly identifiable in the knowledge objects.
+- If ownership, approval responsibility, or accountability is not stated, do not list the person as a stakeholder.
+
+Rules:
+- Only use information present in the knowledge objects below. Do NOT invent requirements, objectives, scope items, stakeholders, or ownership details.
 - Classify each knowledge object as Functional or Non-Functional based on whether it describes an action/feature (Functional) or a quality/performance attribute (Non-Functional).
 - If a knowledge object doesn't clearly fit Functional or Non-Functional, use your best judgment and place it in the more appropriate section.
 - Group requirements by module when multiple modules are present.
 - Always cite the session title for each requirement, exactly as given in the "source" field.
-- Always include the "2. BUSINESS OBJECTIVES" heading. If no business objectives are identified in the knowledge objects, write exactly this line under that heading: "No business objectives were identified in the provided knowledge objects." Do not guess or invent objectives.
-- Always include the "4. FUNCTIONAL REQUIREMENTS" heading. If no functional requirements are identified in the knowledge objects, write exactly this line under that heading: "No functional requirements were identified in the provided knowledge objects."
-- Always include the "5. NON-FUNCTIONAL REQUIREMENTS" heading. If no non-functional requirements are identified in the knowledge objects, write exactly this line under that heading: "No non-functional requirements were identified in the provided knowledge objects."
-- Always include the "6. STAKEHOLDERS" heading. If no stakeholder/ownership information is available in the knowledge objects, write exactly this line under that heading: "No stakeholder information was identified in the provided knowledge objects." Do not guess or invent names.
+
+- Always include the "2. BUSINESS OBJECTIVES" heading.
+- Generate 3 to 5 business objectives whenever sufficient information is available.
+- Only output "No business objectives were identified in the provided knowledge objects." when no knowledge objects exist or when there is genuinely insufficient information to derive meaningful business objectives from the knowledge objects, engagement context, or scope.
+
+- Always include the "4. FUNCTIONAL REQUIREMENTS" heading.
+- If no functional requirements are identified in the knowledge objects, write exactly this line under that heading:
+"No functional requirements were identified in the provided knowledge objects."
+
+- Always include the "5. NON-FUNCTIONAL REQUIREMENTS" heading.
+- If no non-functional requirements are identified in the knowledge objects, write exactly this line under that heading:
+"No non-functional requirements were identified in the provided knowledge objects."
+
+- Always include the "6. STAKEHOLDERS" heading.
+- If no stakeholder information is available, write exactly this line under that heading:
+"No stakeholder information was identified in the provided knowledge objects."
 
 Knowledge objects:
 
@@ -25,4 +63,10 @@ Knowledge objects:
 Engagement: {{ENGAGEMENT_NAME}}
 Scope: {{SCOPE_LABEL}}
 
-Respond with ONLY the BRD document as plain text (no JSON, no markdown fences) — structured with clear section headings exactly as: "1. OVERVIEW", "2. BUSINESS OBJECTIVES", "3. SCOPE", "4. FUNCTIONAL REQUIREMENTS", "5. NON-FUNCTIONAL REQUIREMENTS", "6. STAKEHOLDERS".
+Respond with ONLY the BRD document as plain text (no JSON, no markdown fences) — structured with clear section headings exactly as:
+"1. OVERVIEW",
+"2. BUSINESS OBJECTIVES",
+"3. SCOPE",
+"4. FUNCTIONAL REQUIREMENTS",
+"5. NON-FUNCTIONAL REQUIREMENTS",
+"6. STAKEHOLDERS".
