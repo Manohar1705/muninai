@@ -5,7 +5,7 @@ Your task: organize this knowledge into a structured BRD with these sections:
 2. Business Objectives — identify the key business goals and desired outcomes supported by the knowledge objects, engagement context, and scope.
 
 Rules:
-- Generate between 3 and 5 business objectives whenever sufficient information is available.
+- Generate between 3 and 4 business objectives whenever sufficient information is available.
 - Present objectives as bullet points.
 - Focus on WHY the capability exists, not HOW it is implemented.
 - Do not create one objective per knowledge object.
@@ -15,7 +15,7 @@ Rules:
 - Focus on business outcomes rather than technical implementation details.
 - Business objectives may be reasonably derived from the knowledge objects, engagement name, and scope when clearly supported by the information provided.
 - Avoid generic objectives that are not supported by the available information.
-- Never generate more than 5 objectives regardless of knowledge object count.
+- Never generate more than 4 objectives regardless of knowledge object count.
 
 3. Scope — a concise list of what modules/systems/processes are covered by this document, based strictly on the modules and knowledge objects present. Do not list anything as "out of scope" — only state what IS covered. Each bullet must be a full, descriptive phrase or sentence (at least 4-5 words) that clearly explains what that scope item covers — never a single word or a bare topic name on its own.
 
@@ -26,12 +26,12 @@ Rules:
 6. Stakeholders — list only people or roles that have a genuine stake in the engagement.
 
 Rules:
-- Include only individuals or roles explicitly identified as owners, approvers, decision-makers, accountable parties, or those directly responsible for a module, process, system, or business outcome.
-- Include individuals whose approval, sign-off, accountability, or ownership responsibility is explicitly stated.
-- Do not include meeting attendees, presenters, speakers, participants, trainers, or subject matter experts unless ownership or accountability is explicitly stated.
-- Do not assume a person is a stakeholder solely because they explained a topic or appeared in a meeting.
-- Only include people explicitly named or clearly identifiable in the knowledge objects.
-- If ownership, approval responsibility, or accountability is not stated, do not list the person as a stakeholder.
+- Include people or roles explicitly identified as owners, approvers, decision-makers, accountable parties, or those responsible for a module, system, process, service, or business outcome.
+- Include teams or roles when the knowledge objects clearly indicate ownership, operational responsibility, support responsibility, compliance responsibility, or business impact.
+- Do not include meeting attendees, presenters, speakers, trainers, or participants solely because they attended or explained a topic.
+- Do not assume stakeholder status without evidence of ownership, accountability, responsibility, approval authority, or direct business impact.
+- Only include people or roles supported by the knowledge objects.
+- If no stakeholder information is available, do not invent names or roles.
 
 Rules:
 - Only use information present in the knowledge objects below. Do NOT invent requirements, objectives, scope items, stakeholders, or ownership details.
