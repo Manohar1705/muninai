@@ -691,6 +691,10 @@ router.post("/brd", async (req, res) => {
     return res.status(400).json({ error: "engagementId is required" });
   }
 
+  if (!moduleFilter && !sessionId) {
+    return res.status(400).json({ error: "A module or session is required to generate a BRD." });
+  }
+
   try {
     let knowledgeObjects = await loadKnowledgeObjects(engagementId);
     let scopeLabel = "Whole engagement";

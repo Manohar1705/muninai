@@ -11,8 +11,6 @@ import {
   Input,
   FF,
 } from "../../shared/components/common";
-
-
 import ChatSidebar from "./ui/ChatSidebar";
 import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { useChat } from "./hooks/useChat";
@@ -23,9 +21,17 @@ import { Document, Packer, Paragraph, HeadingLevel } from "docx";
 import jsPDF from "jspdf";
 /* ============================== ASK MUNIN (CHAT) ============================== */
 // Strips ** markdown markers from text so they never show up literally.
+function repairLetterSpacing(text) {
+  if (!text) return text;
+  return text.replace(
+    /(?:\b\w\b[ \t]){3,}\b\w\b/g,
+    (match) => match.replace(/[ \t]/g, "")
+  );
+}
+
 function stripMarkdownBold(text) {
   if (!text) return text;
-  return text
+  return repairLetterSpacing(text)
     .replace(/\*\*(.*?)\*\*/g, "$1")
     .replace(/\*\*/g, "")
     .replace(/^\* /gm, "• ");
@@ -42,7 +48,7 @@ function AskMunin({ engagementId }) {
   const [brdText, setBrdText] = useState("");
   const [brdError, setBrdError] = useState("");
   const [brdScope, setBrdScope] = useState(""); // "module:<name>" | "session:<id>"
-
+  const [brdValidationError, setBrdValidationError] = useState("");
   const modules = useModules(engagementId);
   const navigate = useNavigate();
 
@@ -110,29 +116,37 @@ function AskMunin({ engagementId }) {
       setMessages((m) => [...m, { role: "assistant", text: "Sorry — I couldn't reach the backend to answer that. Is it running?", citation: null, isGap: false }]);
     }
   };
-  const handleGenerateBrd = async () => {
-    setBrdOpen(true);
-    setBrdLoading(true);
-    setBrdError("");
-    setBrdText("");
+const handleGenerateBrd = async () => {
+  if (!brdScope) {
+    setBrdValidationError("Please select a module first.");
+    return;
+  }
 
-    const options = {};
-    if (brdScope.startsWith("module:")) {
-      options.module = brdScope.slice("module:".length);
-    } else if (brdScope.startsWith("session:")) {
-      options.sessionId = brdScope.slice("session:".length);
-    }
+  setBrdValidationError("");
 
-    try {
-      const res = await chatApi.generateBrd(engagementId, options);
-      setBrdText(res.brd);
-    } catch (err) {
-      console.error(err);
-      setBrdError("Failed to generate BRD. Please try again.");
-    } finally {
-      setBrdLoading(false);
-    }
-  };
+  setBrdOpen(true);
+  setBrdLoading(true);
+  setBrdError("");
+  setBrdText("");
+
+  const options = {};
+
+  if (brdScope.startsWith("module:")) {
+    options.module = brdScope.slice("module:".length);
+  } else if (brdScope.startsWith("session:")) {
+    options.sessionId = brdScope.slice("session:".length);
+  }
+
+  try {
+    const res = await chatApi.generateBrd(engagementId, options);
+    setBrdText(res.brd);
+  } catch (err) {
+    console.error(err);
+    setBrdError("Failed to generate BRD. Please try again.");
+  } finally {
+    setBrdLoading(false);
+  }
+};
 
 const handleDownloadBrd = () => {
     const content = "BUSINESS REQUIREMENT DOCUMENT\n\n" + brdText;
@@ -185,7 +199,19 @@ const handleDownloadBrd = () => {
       }
     }
 
-    const doc = new Document({ sections: [{ children }] });
+    const doc = new Document({
+  styles: {
+    default: {
+      document: {
+        run: {
+          font: "Arial",
+          size: 22,
+        },
+      },
+    },
+  },
+  sections: [{ children }],
+});
     const blob = await Packer.toBlob(doc);
 
     const url = URL.createObjectURL(blob);
@@ -196,44 +222,65 @@ const handleDownloadBrd = () => {
     URL.revokeObjectURL(url);
   };
 
-  const handleDownloadPdf = () => {
-    const sections = parseBrdSections(brdText);
-    const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const margin = 48;
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const maxWidth = pageWidth - margin * 2;
-    let y = margin;
+const handleDownloadPdf = () => {
+  const sections = parseBrdSections(brdText);
 
-    const addLine = (text, size, style) => {
-      doc.setFontSize(size);
-      doc.setFont("helvetica", style);
-      const wrapped = doc.splitTextToSize(text, maxWidth);
-      for (const line of wrapped) {
-        if (y > pageHeight - margin) {
-          doc.addPage();
-          y = margin;
-        }
-        doc.text(line, margin, y);
-        y += size * 1.4;
-      }
-    };
+const doc = new jsPDF({
+  unit: "pt",
+  format: "a4",
+});
 
-    addLine("BUSINESS REQUIREMENT DOCUMENT", 18, "bold");
-    y += 10;
+// Important: force normal character spacing
+doc.setCharSpace(0);
 
-    for (const section of sections) {
-      if (section.heading) {
-        y += 8;
-        addLine(section.heading, 13, "bold");
-      }
-      for (const line of section.lines) {
-        addLine(stripMarkdownBold(line), 10, "normal");
-      }
+const margin = 48;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const maxWidth = pageWidth - margin * 2;
+
+  let y = margin;
+
+const sanitizeForPdf = (text) =>
+  text
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[\u2010\u2011\u2012]/g, "-")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"');
+
+const addLine = (text, size, style) => {
+  doc.setFont("helvetica", style);
+  doc.setFontSize(size);
+
+  const wrapped = doc.splitTextToSize(sanitizeForPdf(text), maxWidth);
+
+  for (const line of wrapped) {
+    if (y > pageHeight - margin) {
+      doc.addPage();
+      y = margin;
     }
 
-    doc.save("BRD.pdf");
-  };
+    doc.text(line, margin, y);
+
+    y += size * 1.4;
+  }
+};
+
+  addLine("BUSINESS REQUIREMENT DOCUMENT", 18, "bold");
+  y += 10;
+
+  for (const section of sections) {
+    if (section.heading) {
+      y += 8;
+      addLine(section.heading, 13, "bold");
+    }
+
+    for (const line of section.lines) {
+      addLine(stripMarkdownBold(line), 10, "normal");
+    }
+  }
+
+  doc.save("BRD.pdf");
+};
 
 
   return (
@@ -308,23 +355,50 @@ const handleDownloadBrd = () => {
             </button>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "center", marginTop: 10 }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, alignItems: "flex-start", marginTop: 10 }}>
+           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
             <select
               value={brdScope}
-              onChange={(e) => setBrdScope(e.target.value)}
+              onChange={(e) => {
+                setBrdScope(e.target.value);
+                setBrdValidationError("");
+              }}
               style={{
-                background: C.bgRaised, color: C.text, border: `1px solid ${C.border}`,
-                borderRadius: 6, padding: "5px 8px", fontSize: 12.5, fontFamily: FF.sans,
+                background: C.bgRaised,
+                color: C.text,
+                border: `1px solid ${C.border}`,
+                borderRadius: 6,
+                padding: "5px 8px",
+                fontSize: 12.5,
+                fontFamily: FF.sans,
               }}
             >
-            <option value="">Select a module</option>
+              <option value="">Select a module</option>
               {modules.map((m) => (
-                <option key={m.name} value={`module:${m.name}`}>Module: {m.name}</option>
+                <option key={m.name} value={`module:${m.name}`}>
+                  Module: {m.name}
+                </option>
               ))}
             </select>
-            <button onClick={handleGenerateBrd} style={{ ...btnPrimary, whiteSpace: "nowrap", padding: "6px 12px", fontSize: 12.5 }}>
-              Generate BRD
-            </button>
+
+            {brdValidationError && (
+              <div style={{ fontSize: 11.5, color: C.amber, marginTop: 4 }}>
+                {brdValidationError}
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={handleGenerateBrd}
+            style={{
+              ...btnPrimary,
+              whiteSpace: "nowrap",
+              padding: "6px 12px",
+              fontSize: 12.5,
+            }}
+          >
+            Generate BRD
+          </button>
           </div>
         </Card>
       </div>
