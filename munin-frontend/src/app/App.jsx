@@ -71,12 +71,17 @@ export default function App() {
   // engagement, empty modules" dashboard.
   useEffect(() => {
     if (!currentEngagementId) return;
+    // Auth hasn't resolved yet, so the engagements query is still disabled
+    // (enabled: false) — React Query reports isLoading as false in that
+    // state too, which used to look identical to "loaded and empty" and
+    // wrongly cleared a perfectly valid engagement ID. Wait for auth first.
+    if (authLoading || !isAuthenticated) return;
     if (engagementsLoading) return;
     const stillValid = engagements.some((e) => e.id === currentEngagementId);
     if (!stillValid) {
       setCurrentEngagementId(null);
     }
-  }, [currentEngagementId, engagements, engagementsLoading, setCurrentEngagementId]);
+  }, [currentEngagementId, engagements, engagementsLoading, authLoading, isAuthenticated, setCurrentEngagementId]);
   const { configStatus, showBanner, dismissBanner } = useConfigBanner();
 
   if (authLoading) {
