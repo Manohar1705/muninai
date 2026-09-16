@@ -58,6 +58,7 @@ async function createBot({ meetingUrl, botName }) {
       // meeting_captions reuses the video platform's own native captions
       // (Zoom/Meet/Teams) — no third-party transcription API key needed,
       // which keeps this free-tier friendly like the Groq extraction step.
+      retention: null,
       transcript: {
         provider: { meeting_captions: {} },
       },

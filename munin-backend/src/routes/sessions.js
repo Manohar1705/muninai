@@ -152,7 +152,10 @@ router.patch("/:id/title", async (req, res) => {
   if (result.changes === 0) {
     return res.status(404).json({ error: "Session not found" });
   }
-
+  await db
+    .prepare(`UPDATE meetings SET meeting_title = ? WHERE session_id = ?`)
+    .run(validated.title, req.params.id);
+    
   res.json({
     success: true,
     session: {
